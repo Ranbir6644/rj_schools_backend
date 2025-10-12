@@ -19,11 +19,17 @@ const app = express();
 // Middleware
 app.use(express.json());
 
-// CORS configuration
-const allowedOrigins = ["http://localhost:5173"];
+// CORS configuration - Update for production
+const allowedOrigins = [
+  "http://localhost:5173", 
+  // "https://your-frontend-domain.onrender.com" 
+];
+
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
+    
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
@@ -45,12 +51,20 @@ app.use('/api/fines', fineRoutes);
 app.use("/api/dashboard", dashboardRoutes); 
 app.use("/api/uploads", uploadRoutes);
 
+// Health check route
+app.get("/health", (req, res) => {
+  res.status(200).json({ message: "Server is running!" });
+});
 
-// MongoDB connection
+// MongoDB connection - Updated without deprecated options
 mongoose
-  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(process.env.MONGO_URI)
   .then(() => {
-    console.log("MongoDB connected");
-    app.listen(5000, () => console.log("Server running on port 5000"));
+    console.log("MongoDB connected successfully");
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
-  .catch((err) => console.error(err));
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  });
