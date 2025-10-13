@@ -20,10 +20,7 @@ const app = express();
 app.use(express.json());
 
 // CORS configuration - Update for production
-const allowedOrigins = [
-  "http://localhost:5173", 
-  // "https://your-frontend-domain.onrender.com" 
-];
+const allowedOrigins = ["http://localhost:5173", "http://admin.rjschools.org", "https://admin.rjschools.org"];
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -68,3 +65,4 @@ mongoose
     console.error("MongoDB connection error:", err);
     process.exit(1);
   });
+
