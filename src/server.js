@@ -12,6 +12,7 @@ import holidayRoutes from "./routes/holidayRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import fineRoutes from './routes/fineRoutes.js';
 import dashboardRoutes from "./routes/dashboardRoutes.js"
+import axios from "axios";
 
 dotenv.config();
 const app = express();
@@ -60,9 +61,25 @@ mongoose
     console.log("MongoDB connected successfully");
     const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+    async function fetchExternalApi() {
+      try {
+        const response = await axios.get("https://rj-schools-backend.onrender.com/api/test");
+        console.log("API Response:", response.data);
+      } catch (error) {
+        console.error("Error fetching API:", error.message);
+      }
+    }
+
+    // Run immediately
+    fetchExternalApi();
+
+    // Keep calling every 2 minutes
+    setInterval(fetchExternalApi, 120000);
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err);
     process.exit(1);
   });
+
 
