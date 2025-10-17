@@ -176,11 +176,11 @@ export const markBulkAttendance = async (req, res) => {
 
     if (!classId || !date || !attendanceRecords || !Array.isArray(attendanceRecords)) {
       return res.status(400).json({
-        message: "classId, date, and attendanceRecords array are required"
+        message: "classId, date, and attendanceRecords array are required",
       });
     }
 
-    // Check if class exists
+    // ✅ Check if class exists
     const classExists = await Class.findById(classId);
     if (!classExists) {
       return res.status(404).json({ message: "Class not found" });
@@ -192,101 +192,254 @@ export const markBulkAttendance = async (req, res) => {
     const results = {
       success: [],
       failed: [],
-      updated: []
+      updated: [],
     };
 
-    // Process each attendance record
+    // ✅ Fetch all valid students for this class (map by userId)
+    const students = await Student.find({ classId });
+    const studentMap = new Map(students.map((s) => [s.userId.toString(), s]));
+
+    // ✅ Fetch all existing attendance for this class & date
+    const existing = await Attendance.find({
+      classId,
+      date: attendanceDate,
+      studentId: { $in: attendanceRecords.map((r) => r.studentId) },
+    });
+    const existingMap = new Map(existing.map((a) => [a.studentId.toString(), a]));
+
+    const newDocs = [];
+    const bulkUpdates = [];
+    const absentees = []; // store absent records for fine creation
+
     for (const record of attendanceRecords) {
-      try {
-        const { studentId, status, remarks, checkInTime, checkOutTime } = record;
+      const { studentId, status, remarks, checkInTime, checkOutTime } = record;
 
-        // Validate status
-        if (!["present", "absent", "leave"].includes(status)) {
-          results.failed.push({
-            studentId,
-            reason: "Invalid status. Must be: present, absent, or leave"
-          });
-          continue;
-        }
-
-        // Check if student belongs to the class
-        const student = await Student.findOne({ userId: studentId, classId });
-        if (!student) {
-          results.failed.push({
-            studentId,
-            reason: "Student not found or does not belong to this class"
-          });
-          continue;
-        }
-
-        // Check for existing attendance
-        const existingAttendance = await Attendance.findOne({
-          studentId,
-          classId,
-          date: attendanceDate
-        });
-
-        let attendanceRecord;
-
-        if (existingAttendance) {
-          // Update existing
-          existingAttendance.status = status;
-          existingAttendance.takenBy = takenBy;
-          existingAttendance.remarks = remarks || existingAttendance.remarks;
-          existingAttendance.checkInTime = checkInTime || existingAttendance.checkInTime;
-          existingAttendance.checkOutTime = checkOutTime || existingAttendance.checkOutTime;
-
-          attendanceRecord = await existingAttendance.save();
-          results.updated.push(studentId);
-        } else {
-          // Create new
-          const newAttendance = new Attendance({
-            classId,
-            studentId,
-            date: attendanceDate,
-            status,
-            takenBy,
-            remarks: remarks || "",
-            checkInTime,
-            checkOutTime
-          });
-
-          attendanceRecord = await newAttendance.save();
-          results.success.push(studentId);
-        }
-
-        // ✅ Auto-create fine for absent students (for both new and updated records)
-        if (status === 'absent') {
-          try {
-            await createFineForAbsent(
-              attendanceRecord._id,
-              studentId,
-              classId,
-              attendanceDate
-            );
-            console.log(`Fine created for absent student: ${studentId}`);
-          } catch (fineError) {
-            console.error("Error creating fine for student:", studentId, fineError);
-            // Don't fail the attendance marking if fine creation fails
-          }
-        }
-
-      } catch (error) {
+      // Validate status
+      if (!["present", "absent", "leave"].includes(status)) {
         results.failed.push({
-          studentId: record.studentId,
-          reason: error.message
+          studentId,
+          reason: "Invalid status. Must be: present, absent, or leave",
         });
+        continue;
+      }
+
+      // Validate student belongs to class
+      if (!studentMap.has(studentId.toString())) {
+        results.failed.push({
+          studentId,
+          reason: "Student not found or does not belong to this class",
+        });
+        continue;
+      }
+
+      const existingAttendance = existingMap.get(studentId.toString());
+
+      if (existingAttendance) {
+        // Prepare update
+        bulkUpdates.push({
+          updateOne: {
+            filter: { _id: existingAttendance._id },
+            update: {
+              $set: {
+                status,
+                takenBy,
+                remarks: remarks || existingAttendance.remarks,
+                checkInTime: checkInTime || existingAttendance.checkInTime,
+                checkOutTime: checkOutTime || existingAttendance.checkOutTime,
+              },
+            },
+          },
+        });
+        results.updated.push(studentId);
+
+        if (status === "absent") {
+          absentees.push({ _id: existingAttendance._id, studentId });
+        }
+      } else {
+        // Prepare insert
+        newDocs.push({
+          classId,
+          studentId,
+          date: attendanceDate,
+          status,
+          takenBy,
+          remarks: remarks || "",
+          checkInTime,
+          checkOutTime,
+        });
+        results.success.push(studentId);
+
+        if (status === "absent") {
+          absentees.push({ studentId }); // _id will come after insert
+        }
+      }
+    }
+
+    // ✅ Insert new docs in bulk
+    let insertedDocs = [];
+    if (newDocs.length > 0) {
+      insertedDocs = await Attendance.insertMany(newDocs, { ordered: false });
+      // attach inserted _ids for absentees
+      insertedDocs.forEach((doc) => {
+        if (doc.status === "absent") {
+          absentees.push({ _id: doc._id, studentId: doc.studentId });
+        }
+      });
+    }
+
+    // ✅ Bulk update existing docs
+    if (bulkUpdates.length > 0) {
+      await Attendance.bulkWrite(bulkUpdates);
+    }
+
+    // ✅ Create fines for absentees
+    for (const absent of absentees) {
+      try {
+        await createFineForAbsent(
+          absent._id,
+          absent.studentId,
+          classId,
+          attendanceDate
+        );
+        console.log(`Fine created for absent student: ${absent.studentId}`);
+      } catch (fineError) {
+        console.error(
+          "Error creating fine for student:",
+          absent.studentId,
+          fineError
+        );
       }
     }
 
     res.json({
       message: "Bulk attendance marking completed",
-      results
+      results,
     });
   } catch (err) {
-    res.status(500).json({ message: "Error marking bulk attendance", error: err.message });
+    console.error("Error marking bulk attendance:", err);
+    res
+      .status(500)
+      .json({ message: "Error marking bulk attendance", error: err.message });
   }
 };
+// export const markBulkAttendance = async (req, res) => {
+//   try {
+//     const { classId, date, attendanceRecords } = req.body;
+//     const takenBy = req.user.id;
+
+//     if (!classId || !date || !attendanceRecords || !Array.isArray(attendanceRecords)) {
+//       return res.status(400).json({
+//         message: "classId, date, and attendanceRecords array are required"
+//       });
+//     }
+
+//     // Check if class exists
+//     const classExists = await Class.findById(classId);
+//     if (!classExists) {
+//       return res.status(404).json({ message: "Class not found" });
+//     }
+
+//     const attendanceDate = new Date(date);
+//     attendanceDate.setUTCHours(0, 0, 0, 0);
+
+//     const results = {
+//       success: [],
+//       failed: [],
+//       updated: []
+//     };
+
+//     // Process each attendance record
+//     for (const record of attendanceRecords) {
+//       try {
+//         const { studentId, status, remarks, checkInTime, checkOutTime } = record;
+
+//         // Validate status
+//         if (!["present", "absent", "leave"].includes(status)) {
+//           results.failed.push({
+//             studentId,
+//             reason: "Invalid status. Must be: present, absent, or leave"
+//           });
+//           continue;
+//         }
+
+//         // Check if student belongs to the class
+//         const student = await Student.findOne({ userId: studentId, classId });
+//         if (!student) {
+//           results.failed.push({
+//             studentId,
+//             reason: "Student not found or does not belong to this class"
+//           });
+//           continue;
+//         }
+
+//         // Check for existing attendance
+//         const existingAttendance = await Attendance.findOne({
+//           studentId,
+//           classId,
+//           date: attendanceDate
+//         });
+
+//         let attendanceRecord;
+
+//         if (existingAttendance) {
+//           // Update existing
+//           existingAttendance.status = status;
+//           existingAttendance.takenBy = takenBy;
+//           existingAttendance.remarks = remarks || existingAttendance.remarks;
+//           existingAttendance.checkInTime = checkInTime || existingAttendance.checkInTime;
+//           existingAttendance.checkOutTime = checkOutTime || existingAttendance.checkOutTime;
+
+//           attendanceRecord = await existingAttendance.save();
+//           results.updated.push(studentId);
+//         } else {
+//           // Create new
+//           const newAttendance = new Attendance({
+//             classId,
+//             studentId,
+//             date: attendanceDate,
+//             status,
+//             takenBy,
+//             remarks: remarks || "",
+//             checkInTime,
+//             checkOutTime
+//           });
+
+//           attendanceRecord = await newAttendance.save();
+//           results.success.push(studentId);
+//         }
+
+//         // ✅ Auto-create fine for absent students (for both new and updated records)
+//         if (status === 'absent') {
+//           try {
+//             await createFineForAbsent(
+//               attendanceRecord._id,
+//               studentId,
+//               classId,
+//               attendanceDate
+//             );
+//             console.log(`Fine created for absent student: ${studentId}`);
+//           } catch (fineError) {
+//             console.error("Error creating fine for student:", studentId, fineError);
+//             // Don't fail the attendance marking if fine creation fails
+//           }
+//         }
+
+//       } catch (error) {
+//         results.failed.push({
+//           studentId: record.studentId,
+//           reason: error.message
+//         });
+//       }
+//     }
+
+//     res.json({
+//       message: "Bulk attendance marking completed",
+//       results
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: "Error marking bulk attendance", error: err.message });
+//   }
+// };
 
 // ✅ Get attendance for a specific class on a specific date
 export const getClassAttendance = async (req, res) => {
@@ -625,4 +778,5 @@ export const getTodayAttendanceSummary = async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: "Error fetching today's attendance summary", error: err.message });
   }
+
 };
