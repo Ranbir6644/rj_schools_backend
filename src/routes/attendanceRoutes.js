@@ -17,7 +17,7 @@ const router = express.Router();
 router.use(protect);
 
 // Mark attendance routes
-router.post("/mark", protect, markAttendance);                    // Mark single student attendance
+router.post("/mark", markAttendance);                    // Mark single student attendance
 router.post("/mark-bulk", markBulkAttendance);          // Mark multiple students attendance
 
 // Get attendance routes
@@ -30,5 +30,6 @@ router.get("/today-summary", getTodayAttendanceSummary); // Get today's summary 
 router.get("/student/:studentId", getStudentAttendance); // Get student attendance history
 router.put("/:id", updateAttendance);                   // Update attendance record
 router.delete("/:id", deleteAttendance);                // Delete attendance record
+
 
 export default router;
