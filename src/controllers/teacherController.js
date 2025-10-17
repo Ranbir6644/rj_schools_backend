@@ -6,8 +6,6 @@ import mongoose from "mongoose";
 
 // Create Teacher Profile with Transaction
 export const createTeacher = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
     let userId = req.body.userId;
@@ -18,16 +16,12 @@ export const createTeacher = async (req, res) => {
       const { name, udise, ePunjabId } = req.body;
 
       // Check if user with this udise already exists
-      const existingUser = await User.findOne({ $or: [{ udise }, { ePunjabId }] }).session(session);
+      const existingUser = await User.findOne({ $or: [{ udise }, { ePunjabId }] });
 
       if (existingUser) {
-        await session.abortTransaction();
-        session.endSession();
+
         return res.status(400).json({ message: "User with this udise already exists" });
       }
-
-      // Hash the password
-      // const hashedPassword = await hashPassword(password);
 
       // Create new user
       user = new User({
@@ -37,24 +31,22 @@ export const createTeacher = async (req, res) => {
         role: 'teacher'
       });
 
-      const savedUser = await user.save({ session });
+      const savedUser = await user.save();
       userId = savedUser._id;
       user = savedUser;
     }
 
     if (!userId) {
-      await session.abortTransaction();
-      session.endSession();
+
       return res.status(400).json({
         message: "Either userId or user details (name, udise, ePunjabId) are required"
       });
     }
 
     // Check if teacher profile already exists for this userId
-    const existingTeacher = await Teacher.findOne({ userId }).session(session);
+    const existingTeacher = await Teacher.findOne({ userId });
     if (existingTeacher) {
-      await session.abortTransaction();
-      session.endSession();
+
       return res.status(400).json({
         message: "Teacher profile already exists for this user"
       });
@@ -73,7 +65,7 @@ export const createTeacher = async (req, res) => {
     delete teacherData.role;
 
     const teacher = new Teacher(teacherData);
-    const savedTeacher = await teacher.save({ session });
+    const savedTeacher = await teacher.save();
 
     // Handle image uploads if files are provided
     const files = req.files || {};
@@ -99,14 +91,14 @@ export const createTeacher = async (req, res) => {
         await Teacher.findByIdAndUpdate(
           savedTeacher._id,
           imageUpdates,
-          { session }
         );
       }
 
     } catch (imageError) {
-      // If image upload fails, roll back everything
-      await session.abortTransaction();
-      session.endSession();
+      await Teacher.findByIdAndDelete(savedTeacher._id);
+      if (user && user._id.toString() === userId.toString()) {
+        await User.findByIdAndDelete(userId);
+      }
 
       // Clean up any uploaded images
       if (imageUpdates.photoPublicId) {
@@ -121,10 +113,6 @@ export const createTeacher = async (req, res) => {
         error: imageError.message
       });
     }
-
-    // Commit the transaction
-    await session.commitTransaction();
-    session.endSession();
 
     // If user was created in this request, fetch it
     if (!user) {
@@ -145,9 +133,6 @@ export const createTeacher = async (req, res) => {
     res.status(201).json(responseData);
 
   } catch (err) {
-    // If any error occurs, abort the transaction
-    await session.abortTransaction();
-    session.endSession();
 
     res.status(400).json({
       message: err.message,
@@ -155,6 +140,156 @@ export const createTeacher = async (req, res) => {
     });
   }
 };
+// export const createTeacher = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     let userId = req.body.userId;
+//     let user = null;
+
+//     // If userId is not provided but user details are present, create a new user
+//     if (!userId && req.body.name && req.body.udise && req.body.ePunjabId) {
+//       const { name, udise, ePunjabId } = req.body;
+
+//       // Check if user with this udise already exists
+//       const existingUser = await User.findOne({ $or: [{ udise }, { ePunjabId }] }).session(session);
+
+//       if (existingUser) {
+//         await session.abortTransaction();
+//         session.endSession();
+//         return res.status(400).json({ message: "User with this udise already exists" });
+//       }
+
+//       // Hash the password
+//       // const hashedPassword = await hashPassword(password);
+
+//       // Create new user
+//       user = new User({
+//         name,
+//         udise,
+//         ePunjabId,
+//         role: 'teacher'
+//       });
+
+//       const savedUser = await user.save({ session });
+//       userId = savedUser._id;
+//       user = savedUser;
+//     }
+
+//     if (!userId) {
+//       await session.abortTransaction();
+//       session.endSession();
+//       return res.status(400).json({
+//         message: "Either userId or user details (name, udise, ePunjabId) are required"
+//       });
+//     }
+
+//     // Check if teacher profile already exists for this userId
+//     const existingTeacher = await Teacher.findOne({ userId }).session(session);
+//     if (existingTeacher) {
+//       await session.abortTransaction();
+//       session.endSession();
+//       return res.status(400).json({
+//         message: "Teacher profile already exists for this user"
+//       });
+//     }
+
+//     // Create teacher profile
+//     const teacherData = {
+//       ...req.body,
+//       userId
+//     };
+
+//     // Remove user-specific fields
+//     delete teacherData.udise;
+//     delete teacherData.ePunjabId;
+//     delete teacherData.name;
+//     delete teacherData.role;
+
+//     const teacher = new Teacher(teacherData);
+//     const savedTeacher = await teacher.save({ session });
+
+//     // Handle image uploads if files are provided
+//     const files = req.files || {};
+//     let imageUpdates = {};
+
+//     try {
+//       // Upload photo
+//       if (files.photo?.[0]) {
+//         const result = await uploadFromBuffer(files.photo[0].buffer, "teachers/photo");
+//         imageUpdates.photo = result.secure_url;
+//         imageUpdates.photoPublicId = result.public_id;
+//       }
+
+//       // Upload resume
+//       if (files.resume?.[0]) {
+//         const result = await uploadFromBuffer(files.resume[0].buffer, "teachers/resume");
+//         imageUpdates.resume = result.secure_url;
+//         imageUpdates.resumePublicId = result.public_id;
+//       }
+
+//       // Update teacher with image data if any images were uploaded
+//       if (Object.keys(imageUpdates).length > 0) {
+//         await Teacher.findByIdAndUpdate(
+//           savedTeacher._id,
+//           imageUpdates,
+//           { session }
+//         );
+//       }
+
+//     } catch (imageError) {
+//       // If image upload fails, roll back everything
+//       await session.abortTransaction();
+//       session.endSession();
+
+//       // Clean up any uploaded images
+//       if (imageUpdates.photoPublicId) {
+//         await cloudinary.uploader.destroy(imageUpdates.photoPublicId);
+//       }
+//       if (imageUpdates.resumePublicId) {
+//         await cloudinary.uploader.destroy(imageUpdates.resumePublicId);
+//       }
+
+//       return res.status(400).json({
+//         message: "Image upload failed",
+//         error: imageError.message
+//       });
+//     }
+
+//     // Commit the transaction
+//     await session.commitTransaction();
+//     session.endSession();
+
+//     // If user was created in this request, fetch it
+//     if (!user) {
+//       user = await User.findById(userId);
+//     }
+
+//     const responseData = {
+//       _id: savedTeacher._id,
+//       name: user.name,
+//       udise: user.udise,
+//       ePunjabId: user.ePunjabId,
+//       role: user.role,
+//       ...savedTeacher.toObject(),
+//       ...imageUpdates, // Include image URLs
+//       userId: user._id
+//     };
+
+//     res.status(201).json(responseData);
+
+//   } catch (err) {
+//     // If any error occurs, abort the transaction
+//     await session.abortTransaction();
+//     session.endSession();
+
+//     res.status(400).json({
+//       message: err.message,
+//       details: "Transaction rolled back - no user or teacher was created"
+//     });
+//   }
+// };
 
 // Get All Teachers
 export const getTeachers = async (req, res) => {
@@ -262,3 +397,4 @@ export const deleteTeacher = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
