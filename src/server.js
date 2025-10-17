@@ -64,7 +64,7 @@ mongoose
 
     async function fetchExternalApi() {
       try {
-        const response = await axios.get("https://rj-schools-backend.onrender.com/api/test");
+        const response = await axios.get("https://rj-schools-backend.onrender.com/health");
         console.log("API Response:", response.data);
       } catch (error) {
         console.error("Error fetching API:", error.message);
@@ -81,5 +81,6 @@ mongoose
     console.error("MongoDB connection error:", err);
     process.exit(1);
   });
+
 
 
