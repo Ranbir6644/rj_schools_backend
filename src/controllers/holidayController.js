@@ -1,31 +1,7 @@
 import Holiday from "../models/Holiday.js";
 
 // ✅ Create a new holiday
-// export const createHoliday = async (req, res) => {
-//   try {
-//     const { title, description, date } = req.body;
 
-//     if (!title || !date) {
-//       return res.status(400).json({ message: "Title and date are required" });
-//     }
-
-//     const existing = await Holiday.findOne({ date: new Date(date) });
-//     if (existing) {
-//       return res.status(400).json({ message: "Holiday already exists for this date" });
-//     }
-
-//     const holiday = await Holiday.create({
-//       title,
-//       description,
-//       date: new Date(date),
-//       createdBy: req.user.id,
-//     });
-
-//     res.status(201).json({ message: "Holiday created successfully", holiday });
-//   } catch (err) {
-//     res.status(500).json({ message: "Error creating holiday", error: err.message });
-//   }
-// };
 
 
 // ✅ Create a new holiday - ENHANCED DUPLICATE CHECK
@@ -219,12 +195,12 @@ export const getHolidaysByMonth = async (req, res) => {
 };
 
 // ✅ Mark all Sundays as holidays for a specific month
-
+// ✅ Mark all Sundays as holidays for a specific month - FIXED TIMEZONE ISSUE
 export const markSundaysAsHolidays = async (req, res) => {
   try {
     const { month, year, title = "Sunday Holiday", description = "Weekly off" } = req.body;
 
-    // Validate and parse input - FIXED: Convert to numbers
+    // Validate and parse input
     const monthNum = parseInt(month);
     const yearNum = parseInt(year);
 
@@ -246,11 +222,11 @@ export const markSundaysAsHolidays = async (req, res) => {
       });
     }
 
-    // Get all Sundays for the given month and year
+    // Get all Sundays for the given month and year with proper timezone handling
     const sundays = getSundaysInMonth(monthNum, yearNum);
 
     if (sundays.length === 0) {
-      return res.status(200).json({ // Changed to 200 since it's not really an error
+      return res.status(200).json({
         message: "No Sundays found for the given month and year",
         summary: {
           totalSundays: 0,
@@ -275,12 +251,19 @@ export const markSundaysAsHolidays = async (req, res) => {
     // Create holidays for each Sunday
     for (const sundayDate of sundays) {
       try {
-        // Create new date objects to avoid mutation issues
-        const startOfDay = new Date(sundayDate);
-        startOfDay.setHours(0, 0, 0, 0);
+        // Use UTC date to avoid timezone issues
+        const utcDate = new Date(Date.UTC(
+          sundayDate.getUTCFullYear(),
+          sundayDate.getUTCMonth(),
+          sundayDate.getUTCDate(),
+          12, 0, 0, 0 // Set to noon UTC to avoid timezone shift
+        ));
 
-        const endOfDay = new Date(sundayDate);
-        endOfDay.setHours(23, 59, 59, 999);
+        const startOfDay = new Date(utcDate);
+        startOfDay.setUTCHours(0, 0, 0, 0);
+
+        const endOfDay = new Date(utcDate);
+        endOfDay.setUTCHours(23, 59, 59, 999);
 
         // Check if holiday already exists for this date
         const existingHoliday = await Holiday.findOne({
@@ -292,7 +275,7 @@ export const markSundaysAsHolidays = async (req, res) => {
 
         if (existingHoliday) {
           results.alreadyExists.push({
-            date: sundayDate.toISOString().split('T')[0],
+            date: utcDate.toISOString().split('T')[0],
             existingHoliday: {
               title: existingHoliday.title,
               id: existingHoliday._id
@@ -302,11 +285,11 @@ export const markSundaysAsHolidays = async (req, res) => {
           continue;
         }
 
-        // Create new holiday
+        // Create new holiday with UTC date
         const holiday = await Holiday.create({
           title,
           description,
-          date: sundayDate,
+          date: utcDate,
           createdBy: req.user.id,
         });
 
@@ -336,7 +319,6 @@ export const markSundaysAsHolidays = async (req, res) => {
       message += `Encountered ${results.errors.length} error(s). `;
     }
 
-    // If no action was taken (all already exist or errors)
     if (results.created.length === 0 && results.alreadyExists.length > 0) {
       message = `All ${results.alreadyExists.length} Sundays are already marked as holidays. No new holidays were created.`;
     }
@@ -361,66 +343,82 @@ export const markSundaysAsHolidays = async (req, res) => {
   }
 };
 
-// Helper function to get all Sundays in a month - IMPROVED
+// Helper function to get all Sundays in a month - FIXED TIMEZONE ISSUE
 function getSundaysInMonth(month, year) {
   const sundays = [];
-  const date = new Date(year, month - 1, 1); // Month is 0-indexed in JavaScript Date
-
-  // Validate the date
-  if (isNaN(date.getTime())) {
-    throw new Error(`Invalid month/year combination: ${month}/${year}`);
-  }
-
+  
+  // Use UTC to avoid timezone issues
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  
   // Find first Sunday of the month
-  while (date.getDay() !== 0 && date.getMonth() === month - 1) {
-    date.setDate(date.getDate() + 1);
+  while (date.getUTCDay() !== 0) {
+    date.setUTCDate(date.getUTCDate() + 1);
   }
 
   // If we went to next month, return empty array
-  if (date.getMonth() !== month - 1) {
+  if (date.getUTCMonth() !== month - 1) {
     return [];
   }
 
-  // Get all Sundays in the month
-  while (date.getMonth() === month - 1) {
-    sundays.push(new Date(date));
-    date.setDate(date.getDate() + 7);
+  // Get all Sundays in the month using UTC
+  while (date.getUTCMonth() === month - 1) {
+    // Create a new date object for each Sunday to avoid reference issues
+    const sunday = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      12, 0, 0, 0 // Set to noon UTC for consistency
+    ));
+    sundays.push(sunday);
+    date.setUTCDate(date.getUTCDate() + 7);
   }
 
   return sundays;
 }
 
-
-
 // export const markSundaysAsHolidays = async (req, res) => {
 //   try {
 //     const { month, year, title = "Sunday Holiday", description = "Weekly off" } = req.body;
 
-//     // Validate input
-//     if (!month || !year) {
+//     // Validate and parse input - FIXED: Convert to numbers
+//     const monthNum = parseInt(month);
+//     const yearNum = parseInt(year);
+
+//     if (!month || !year || isNaN(monthNum) || isNaN(yearNum)) {
 //       return res.status(400).json({
-//         message: "Month and year are required in request body"
+//         message: "Valid month and year are required in request body"
 //       });
 //     }
 
-//     if (month < 1 || month > 12) {
+//     if (monthNum < 1 || monthNum > 12) {
 //       return res.status(400).json({
 //         message: "Month must be between 1 and 12"
 //       });
 //     }
 
-//     if (year < 2000 || year > 2100) {
+//     if (yearNum < 2000 || yearNum > 2100) {
 //       return res.status(400).json({
 //         message: "Year must be between 2000 and 2100"
 //       });
 //     }
 
 //     // Get all Sundays for the given month and year
-//     const sundays = getSundaysInMonth(month, year);
+//     const sundays = getSundaysInMonth(monthNum, yearNum);
 
 //     if (sundays.length === 0) {
-//       return res.status(400).json({
-//         message: "No Sundays found for the given month and year"
+//       return res.status(200).json({ // Changed to 200 since it's not really an error
+//         message: "No Sundays found for the given month and year",
+//         summary: {
+//           totalSundays: 0,
+//           created: 0,
+//           alreadyExists: 0,
+//           errors: 0
+//         },
+//         details: {
+//           created: [],
+//           alreadyExists: [],
+//           errors: []
+//         }
 //       });
 //     }
 
@@ -433,34 +431,46 @@ function getSundaysInMonth(month, year) {
 //     // Create holidays for each Sunday
 //     for (const sundayDate of sundays) {
 //       try {
+//         // Create new date objects to avoid mutation issues
+//         const startOfDay = new Date(sundayDate);
+//         startOfDay.setHours(0, 0, 0, 0);
+
+//         const endOfDay = new Date(sundayDate);
+//         endOfDay.setHours(23, 59, 59, 999);
+
 //         // Check if holiday already exists for this date
 //         const existingHoliday = await Holiday.findOne({
 //           date: {
-//             $gte: new Date(sundayDate.setHours(0, 0, 0, 0)),
-//             $lt: new Date(sundayDate.setHours(23, 59, 59, 999))
+//             $gte: startOfDay,
+//             $lt: endOfDay
 //           }
 //         });
 
 //         if (existingHoliday) {
 //           results.alreadyExists.push({
 //             date: sundayDate.toISOString().split('T')[0],
-//             existingHoliday: existingHoliday.title
+//             existingHoliday: {
+//               title: existingHoliday.title,
+//               id: existingHoliday._id
+//             },
+//             message: `Holiday '${existingHoliday.title}' already exists for this date`
 //           });
 //           continue;
-//         } else {
-//           // Create new holiday
-//           const holiday = await Holiday.create({
-//             title,
-//             description,
-//             date: sundayDate,
-//             createdBy: req.user.id,
-//           });
-
-//           results.created.push({
-//             date: holiday.date.toISOString().split('T')[0],
-//             holidayId: holiday._id
-//           });
 //         }
+
+//         // Create new holiday
+//         const holiday = await Holiday.create({
+//           title,
+//           description,
+//           date: sundayDate,
+//           createdBy: req.user.id,
+//         });
+
+//         results.created.push({
+//           date: holiday.date.toISOString().split('T')[0],
+//           holidayId: holiday._id,
+//           title: holiday.title
+//         });
 
 //       } catch (error) {
 //         results.errors.push({
@@ -482,6 +492,11 @@ function getSundaysInMonth(month, year) {
 //       message += `Encountered ${results.errors.length} error(s). `;
 //     }
 
+//     // If no action was taken (all already exist or errors)
+//     if (results.created.length === 0 && results.alreadyExists.length > 0) {
+//       message = `All ${results.alreadyExists.length} Sundays are already marked as holidays. No new holidays were created.`;
+//     }
+    
 //     res.status(200).json({
 //       message: message.trim(),
 //       summary: {
@@ -494,6 +509,7 @@ function getSundaysInMonth(month, year) {
 //     });
 
 //   } catch (err) {
+//     console.error("Error in markSundaysAsHolidays:", err);
 //     res.status(500).json({
 //       message: "Error marking Sundays as holidays",
 //       error: err.message
@@ -501,14 +517,24 @@ function getSundaysInMonth(month, year) {
 //   }
 // };
 
-// // Helper function to get all Sundays in a month
+// // Helper function to get all Sundays in a month - IMPROVED
 // function getSundaysInMonth(month, year) {
 //   const sundays = [];
 //   const date = new Date(year, month - 1, 1); // Month is 0-indexed in JavaScript Date
 
+//   // Validate the date
+//   if (isNaN(date.getTime())) {
+//     throw new Error(`Invalid month/year combination: ${month}/${year}`);
+//   }
+
 //   // Find first Sunday of the month
-//   while (date.getDay() !== 0) {
+//   while (date.getDay() !== 0 && date.getMonth() === month - 1) {
 //     date.setDate(date.getDate() + 1);
+//   }
+
+//   // If we went to next month, return empty array
+//   if (date.getMonth() !== month - 1) {
+//     return [];
 //   }
 
 //   // Get all Sundays in the month
