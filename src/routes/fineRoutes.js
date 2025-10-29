@@ -5,7 +5,8 @@ import {
   clearStudentFine,
   updateFineBalance,
   getFinePaymentHistory,
-  syncFinesFromAttendance
+  syncFinesFromAttendance,
+  getAllClassesFines
 } from "../controllers/fineController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -29,3 +30,4 @@ router.post("/sync", syncFinesFromAttendance); // Sync fines from attendance
 
 
 export default router;
+
