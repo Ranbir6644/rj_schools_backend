@@ -22,7 +22,7 @@ router.get("/classes/all", getAllClassesFines); // Newly added on  10-29-2025 Ge
 router.get("/student/:studentId/summary", getStudentFineSummary); // Get student fine summary
 
 router.post("/student/:studentId/clear", clearStudentFine); // Clear all fines for student
-router.patch("/:fineId/payment", updateFineBalance); // Partial payment for fine
+router.patch("/:studentId/payment", updateFineBalance); // Partial payment for fine
 router.get("/:fineId/payment-history", getFinePaymentHistory); // Get payment history
 
 // Utility routes
@@ -30,4 +30,5 @@ router.post("/sync", syncFinesFromAttendance); // Sync fines from attendance
 
 
 export default router;
+
 
