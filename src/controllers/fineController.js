@@ -2,6 +2,7 @@ import Fine from "../models/Fine.js";
 import Attendance from "../models/Attendance.js";
 import Class from "../models/Class.js";
 import User from "../models/User.js";
+import mongoose from "mongoose";
 
 // ✅ Create fine for absent student (called from attendance marking)
 export const createFineForAbsent = async (attendanceId, studentId, classId, date) => {
@@ -113,11 +114,11 @@ export const clearStudentFine = async (req, res) => {
     }
 
     // Get all pending fines for the student
-    const query = { 
-      studentId, 
-      status: { $in: ["pending", "partially_paid"] } 
+    const query = {
+      studentId,
+      status: { $in: ["pending", "partially_paid"] }
     };
-    
+
     if (classId) query.classId = classId;
 
     const pendingFines = await Fine.find(query);
@@ -132,11 +133,11 @@ export const clearStudentFine = async (req, res) => {
     // Update each fine record
     for (const fine of pendingFines) {
       const paymentAmount = fine.pendingAmount;
-      
+
       fine.paidAmount += paymentAmount;
       fine.pendingAmount = 0;
       fine.status = "paid";
-      
+
       // Add to payment history
       fine.paymentHistory.push({
         paymentDate,
@@ -170,19 +171,19 @@ export const updateFineBalance = async (req, res) => {
     const { classId } = req.query; // Optional: to filter by class
 
     if (!studentId || !paymentAmount) {
-      return res.status(400).json({ 
-        message: "studentId and paymentAmount are required" 
+      return res.status(400).json({
+        message: "studentId and paymentAmount are required"
       });
     }
 
     if (paymentAmount <= 0) {
-      return res.status(400).json({ 
-        message: "paymentAmount must be greater than 0" 
+      return res.status(400).json({
+        message: "paymentAmount must be greater than 0"
       });
     }
 
     // Find all pending fines for the student
-    const query = { 
+    const query = {
       studentId,
       status: { $in: ["pending", "partially_paid"] }
     };
@@ -196,8 +197,8 @@ export const updateFineBalance = async (req, res) => {
     // Calculate total pending amount
     const totalPendingAmount = pendingFines.reduce((sum, fine) => sum + fine.pendingAmount, 0);
     if (paymentAmount > totalPendingAmount) {
-      return res.status(400).json({ 
-        message: `Payment amount (Rs.${paymentAmount}) exceeds total pending amount (Rs.${totalPendingAmount})` 
+      return res.status(400).json({
+        message: `Payment amount (Rs.${paymentAmount}) exceeds total pending amount (Rs.${totalPendingAmount})`
       });
     }
 
@@ -211,12 +212,12 @@ export const updateFineBalance = async (req, res) => {
       if (remainingPayment <= 0) break;
 
       const paymentForThisFine = Math.min(remainingPayment, fine.pendingAmount);
-      
+
       // Update fine
       fine.paidAmount += paymentForThisFine;
       fine.pendingAmount = fine.fineAmount - fine.paidAmount;
       remainingPayment -= paymentForThisFine;
-      
+
       if (fine.pendingAmount === 0) {
         fine.status = "paid";
       } else {
@@ -292,7 +293,7 @@ export const syncFinesFromAttendance = async (req, res) => {
     const { classId, startDate, endDate } = req.body;
 
     // Find all absent attendance records
-    const query = { 
+    const query = {
       status: "absent",
       fineAmount: { $gt: 0 }
     };
@@ -313,7 +314,7 @@ export const syncFinesFromAttendance = async (req, res) => {
     for (const attendance of absentRecords) {
       // Check if fine already exists
       const existingFine = await Fine.findOne({ attendanceId: attendance._id });
-      
+
       if (!existingFine) {
         await createFineForAbsent(
           attendance._id,
@@ -352,6 +353,11 @@ export const getAllClassesFines = async (req, res) => {
   try {
     const { status, month, year } = req.query;
 
+    const user = req.user;
+    let teacherId;
+    if (user.role === 'teacher') {
+      teacherId = user.id;
+    }
     // Build match stage for fines
     const matchStage = {};
 
@@ -385,6 +391,9 @@ export const getAllClassesFines = async (req, res) => {
       },
       {
         $unwind: "$class"
+      },
+      {
+        $match: teacherId ? { "class.incharge": new mongoose.Types.ObjectId(teacherId) } : {}
       },
       {
         $lookup: {
@@ -585,6 +594,7 @@ export const getAllClassesFines = async (req, res) => {
     });
   }
 };  
+
 // import Fine from "../models/Fine.js";
 // import Attendance from "../models/Attendance.js";
 // import Class from "../models/Class.js";
@@ -752,12 +762,13 @@ export const getAllClassesFines = async (req, res) => {
 // // ✅ Update fine balance (partial payment)
 // export const updateFineBalance = async (req, res) => {
 //   try {
-//     const { fineId } = req.params;
+//     const { studentId } = req.params;
 //     const { paymentAmount, paymentMethod = "cash", remarks = "" } = req.body;
+//     const { classId } = req.query; // Optional: to filter by class
 
-//     if (!fineId || !paymentAmount) {
+//     if (!studentId || !paymentAmount) {
 //       return res.status(400).json({ 
-//         message: "fineId and paymentAmount are required" 
+//         message: "studentId and paymentAmount are required" 
 //       });
 //     }
 
@@ -767,53 +778,77 @@ export const getAllClassesFines = async (req, res) => {
 //       });
 //     }
 
-//     const fine = await Fine.findById(fineId);
-//     if (!fine) {
-//       return res.status(404).json({ message: "Fine record not found" });
+//     // Find all pending fines for the student
+//     const query = { 
+//       studentId,
+//       status: { $in: ["pending", "partially_paid"] }
+//     };
+//     if (classId) query.classId = classId;
+
+//     const pendingFines = await Fine.find(query).sort({ date: 1 });
+//     if (pendingFines.length === 0) {
+//       return res.status(404).json({ message: "No pending fines found for this student" });
 //     }
 
-//     if (fine.status === "paid") {
-//       return res.status(400).json({ message: "Fine is already fully paid" });
-//     }
-
-//     if (paymentAmount > fine.pendingAmount) {
+//     // Calculate total pending amount
+//     const totalPendingAmount = pendingFines.reduce((sum, fine) => sum + fine.pendingAmount, 0);
+//     if (paymentAmount > totalPendingAmount) {
 //       return res.status(400).json({ 
-//         message: `Payment amount (Rs.${paymentAmount}) exceeds pending amount (Rs.${fine.pendingAmount})` 
+//         message: `Payment amount (Rs.${paymentAmount}) exceeds total pending amount (Rs.${totalPendingAmount})` 
 //       });
 //     }
 
 //     const paymentDate = new Date();
 //     const receivedBy = req.user.id;
+//     let remainingPayment = paymentAmount;
+//     const updatedFines = [];
 
-//     // Update fine
-//     fine.paidAmount += paymentAmount;
-//     fine.pendingAmount = fine.fineAmount - fine.paidAmount;
-    
-//     if (fine.pendingAmount === 0) {
-//       fine.status = "paid";
-//     } else {
-//       fine.status = "partially_paid";
+//     // Update fines one by one until payment is fully allocated
+//     for (const fine of pendingFines) {
+//       if (remainingPayment <= 0) break;
+
+//       const paymentForThisFine = Math.min(remainingPayment, fine.pendingAmount);
+      
+//       // Update fine
+//       fine.paidAmount += paymentForThisFine;
+//       fine.pendingAmount = fine.fineAmount - fine.paidAmount;
+//       remainingPayment -= paymentForThisFine;
+      
+//       if (fine.pendingAmount === 0) {
+//         fine.status = "paid";
+//       } else {
+//         fine.status = "partially_paid";
+//       }
+
+//       // Add to payment history
+//       fine.paymentHistory.push({
+//         paymentDate,
+//         amount: paymentForThisFine,
+//         paymentMethod,
+//         remarks,
+//         receivedBy
+//       });
+
+//       const updatedFine = await fine.save();
+//       await updatedFine.populate([
+//         { path: 'studentId', select: 'name udise ePunjabId' },
+//         { path: 'classId', select: 'name section' }
+//       ]);
+//       updatedFines.push(updatedFine);
 //     }
 
-//     // Add to payment history
-//     fine.paymentHistory.push({
-//       paymentDate,
-//       amount: paymentAmount,
-//       paymentMethod,
-//       remarks,
-//       receivedBy
-//     });
-
-//     const updatedFine = await fine.save();
-//     await updatedFine.populate([
-//       { path: 'studentId', select: 'name udise ePunjabId' },
-//       { path: 'classId', select: 'name section' }
-//     ]);
+//     // Get updated totals
+//     const updatedTotals = {
+//       totalFineAmount: updatedFines.reduce((sum, fine) => sum + fine.fineAmount, 0),
+//       totalPaidAmount: updatedFines.reduce((sum, fine) => sum + fine.paidAmount, 0),
+//       totalPendingAmount: updatedFines.reduce((sum, fine) => sum + fine.pendingAmount, 0),
+//     };
 
 //     res.json({
 //       message: `Payment of Rs.${paymentAmount} applied successfully`,
-//       fine: updatedFine,
-//       remainingBalance: updatedFine.pendingAmount
+//       student: updatedFines[0].studentId,
+//       updatedFines,
+//       totals: updatedTotals
 //     });
 //   } catch (err) {
 //     res.status(500).json({ message: "Error updating fine balance", error: err.message });
@@ -909,9 +944,6 @@ export const getAllClassesFines = async (req, res) => {
 //   }
 // };
 
-
-
-// // change
 // // ✅ Get all classes fines list with summary
 // export const getAllClassesFines = async (req, res) => {
 //   try {
@@ -985,17 +1017,22 @@ export const getAllClassesFines = async (req, res) => {
 //           },
 //           studentFines: {
 //             $push: {
-//               studentId: "$studentId",
-//               studentName: "$student.name",
-//               studentUdise: "$student.udise",
-//               studentEPunjabId: "$student.ePunjabId",
-//               fineId: "$_id",
-//               date: "$date",
-//               fineAmount: "$fineAmount",
-//               paidAmount: "$paidAmount",
-//               pendingAmount: "$pendingAmount",
-//               status: "$status",
-//               attendanceId: "$attendanceId"
+//               _id: "$studentId",
+//               name: "$student.name",
+//               udise: "$student.udise",
+//               ePunjabId: "$student.ePunjabId",
+//               totalFineAmount: "$fineAmount",
+//               totalPaidAmount: "$paidAmount",
+//               totalPendingAmount: "$pendingAmount",
+//               fineDetails: {
+//                 fineId: "$_id",
+//                 date: "$date",
+//                 amount: "$fineAmount",
+//                 paid: "$paidAmount",
+//                 pending: "$pendingAmount",
+//                 status: "$status",
+//                 attendanceId: "$attendanceId"
+//               }
 //             }
 //           }
 //         }
@@ -1015,6 +1052,72 @@ export const getAllClassesFines = async (req, res) => {
 //           pendingRecords: 1,
 //           paidRecords: 1,
 //           studentFines: 1
+//         }
+//       },
+//       {
+//         $unwind: "$studentFines"
+//       },
+//       {
+//         $group: {
+//           _id: {
+//             classId: "$classId",
+//             studentId: "$studentFines._id"
+//           },
+//           className: { $first: "$className" },
+//           classSection: { $first: "$classSection" },
+//           classIncharge: { $first: "$classIncharge" },
+//           studentInfo: { $first: "$studentFines" },
+//           fineDetails: { $push: "$studentFines.fineDetails" },
+//           totalFineAmount: { $sum: "$studentFines.totalFineAmount" },
+//           totalPaidAmount: { $sum: "$studentFines.totalPaidAmount" },
+//           totalPendingAmount: { $sum: "$studentFines.totalPendingAmount" }
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$_id.classId",
+//           className: { $first: "$className" },
+//           classSection: { $first: "$classSection" },
+//           classIncharge: { $first: "$classIncharge" },
+//           totalStudentsWithFines: { $sum: 1 },
+//           totalFineAmount: { $sum: "$totalFineAmount" },
+//           totalPaidAmount: { $sum: "$totalPaidAmount" },
+//           totalPendingAmount: { $sum: "$totalPendingAmount" },
+//           totalRecords: { $sum: { $size: "$fineDetails" } },
+//           pendingRecords: {
+//             $sum: {
+//               $size: {
+//                 $filter: {
+//                   input: "$fineDetails",
+//                   as: "fine",
+//                   cond: { $in: ["$$fine.status", ["pending", "partially_paid"]] }
+//                 }
+//               }
+//             }
+//           },
+//           paidRecords: {
+//             $sum: {
+//               $size: {
+//                 $filter: {
+//                   input: "$fineDetails",
+//                   as: "fine",
+//                   cond: { $eq: ["$$fine.status", "paid"] }
+//                 }
+//               }
+//             }
+//           },
+//           students: {
+//             $push: {
+//               _id: "$studentInfo._id",
+//               name: "$studentInfo.name",
+//               udise: "$studentInfo.udise",
+//               ePunjabId: "$studentInfo.ePunjabId",
+//               totalFineAmount: "$totalFineAmount",
+//               totalPaidAmount: "$totalPaidAmount",
+//               totalPendingAmount: "$totalPendingAmount",
+//               fineDetails: "$fineDetails"
+//             }
+//           }
 //         }
 //       },
 //       {
