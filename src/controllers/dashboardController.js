@@ -586,10 +586,10 @@ const getGenderDistributionData = async () => {
 //       }
 //     });
 //   } catch (err) {
-//     res.status(500).json({ 
+//     res.status(500).json({
 //       success: false,
-//       message: "Error fetching dashboard summary", 
-//       error: err.message 
+//       message: "Error fetching dashboard summary",
+//       error: err.message
 //     });
 //   }
 // };
@@ -610,9 +610,9 @@ const getGenderDistributionData = async () => {
 
 //     // Build match stage for attendance aggregation
 //     const attendanceMatchStage = {
-//       date: { 
-//         $gte: startDate, 
-//         $lte: endDate 
+//       date: {
+//         $gte: startDate,
+//         $lte: endDate
 //       }
 //     };
 
@@ -654,17 +654,17 @@ const getGenderDistributionData = async () => {
 
 //     // Get holidays count for the month
 //     const holidaysCount = await Holiday.countDocuments({
-//       date: { 
-//         $gte: startDate, 
-//         $lte: endDate 
+//       date: {
+//         $gte: startDate,
+//         $lte: endDate
 //       }
 //     });
 
 //     // Build match stage for fines aggregation
 //     const finesMatchStage = {
-//       date: { 
-//         $gte: startDate, 
-//         $lte: endDate 
+//       date: {
+//         $gte: startDate,
+//         $lte: endDate
 //       },
 //       status: { $in: ["pending", "partially_paid"] }
 //     };
@@ -710,10 +710,134 @@ const getGenderDistributionData = async () => {
 //       }
 //     });
 //   } catch (err) {
-//     res.status(500).json({ 
+//     res.status(500).json({
 //       success: false,
-//       message: "Error fetching attendance graph data", 
-//       error: err.message 
+//       message: "Error fetching attendance graph data",
+//       error: err.message
+//     });
+//   }
+// };
+
+// // ✅ Get Daily Attendance Graph Data (for a specific date)
+// export const getDailyAttendanceGraphData = async (req, res) => {
+//   try {
+//     const { classId, date } = req.query;
+
+//     // Default to current date if not provided
+//     const currentDate = new Date();
+//     const targetDate = date ? new Date(date) : currentDate;
+
+//     // Set the date to start of day and end of day
+//     const startDate = new Date(targetDate.setHours(0, 0, 0, 0));
+//     const endDate = new Date(targetDate.setHours(23, 59, 59, 999));
+
+//     // Build match stage for attendance aggregation
+//     const attendanceMatchStage = {
+//       date: {
+//         $gte: startDate,
+//         $lte: endDate
+//       }
+//     };
+
+//     // Add class filter if provided and not "all"
+//     if (classId && classId !== "all") {
+//       attendanceMatchStage.classId = new mongoose.Types.ObjectId(classId);
+//     }
+
+//     // Get attendance statistics for the day
+//     const attendanceStats = await Attendance.aggregate([
+//       { $match: attendanceMatchStage },
+//       {
+//         $group: {
+//           _id: "$status",
+//           count: { $sum: 1 }
+//         }
+//       }
+//     ]);
+
+//     // Initialize counts
+//     let present = 0;
+//     let absent = 0;
+//     let leave = 0;
+
+//     // Process attendance stats
+//     attendanceStats.forEach(stat => {
+//       switch (stat._id) {
+//         case "present":
+//           present = stat.count;
+//           break;
+//         case "absent":
+//           absent = stat.count;
+//           break;
+//         case "leave":
+//           leave = stat.count;
+//           break;
+//       }
+//     });
+
+//     // Check if the day is a holiday
+//     const isHoliday = await Holiday.findOne({
+//       date: {
+//         $gte: startDate,
+//         $lte: endDate
+//       }
+//     });
+
+//     const holidaysCount = isHoliday ? 1 : 0;
+
+//     // Build match stage for fines aggregation (for the day)
+//     const finesMatchStage = {
+//       date: {
+//         $gte: startDate,
+//         $lte: endDate
+//       },
+//       status: { $in: ["pending", "partially_paid"] }
+//     };
+
+//     // Add class filter if provided and not "all"
+//     if (classId && classId !== "all") {
+//       finesMatchStage.classId = new mongoose.Types.ObjectId(classId);
+//     }
+
+//     // Get pending fines for the day
+//     const pendingFinesResult = await Fine.aggregate([
+//       { $match: finesMatchStage },
+//       {
+//         $group: {
+//           _id: null,
+//           totalPendingAmount: { $sum: "$pendingAmount" },
+//           totalRecords: { $sum: 1 }
+//         }
+//       }
+//     ]);
+
+//     const pendingFines = pendingFinesResult[0]?.totalPendingAmount || 0;
+
+//     res.json({
+//       success: true,
+//       data: {
+//         period: {
+//           date: targetDate.toISOString().split('T')[0], // YYYY-MM-DD
+//           classId: classId || "all"
+//         },
+//         attendance: {
+//           present,
+//           absent,
+//           leave,
+//           holidays: holidaysCount,
+//           total: present + absent + leave
+//         },
+//         fines: {
+//           pendingAmount: pendingFines,
+//           pendingRecords: pendingFinesResult[0]?.totalRecords || 0
+//         }
+//       }
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: "Error fetching daily attendance graph data",
+//       error: err.message
 //     });
 //   }
 // };
@@ -765,10 +889,10 @@ const getGenderDistributionData = async () => {
 //       }
 //     });
 //   } catch (err) {
-//     res.status(500).json({ 
+//     res.status(500).json({
 //       success: false,
-//       message: "Error fetching gender distribution", 
-//       error: err.message 
+//       message: "Error fetching gender distribution",
+//       error: err.message
 //     });
 //   }
 // };
@@ -786,10 +910,10 @@ const getGenderDistributionData = async () => {
 //       data: classes
 //     });
 //   } catch (err) {
-//     res.status(500).json({ 
+//     res.status(500).json({
 //       success: false,
-//       message: "Error fetching classes", 
-//       error: err.message 
+//       message: "Error fetching classes",
+//       error: err.message
 //     });
 //   }
 // };
@@ -822,10 +946,10 @@ const getGenderDistributionData = async () => {
 //       }
 //     });
 //   } catch (err) {
-//     res.status(500).json({ 
+//     res.status(500).json({
 //       success: false,
-//       message: "Error fetching complete dashboard data", 
-//       error: err.message 
+//       message: "Error fetching complete dashboard data",
+//       error: err.message
 //     });
 //   }
 // };
@@ -964,5 +1088,5 @@ const getGenderDistributionData = async () => {
 //     other,
 //     total: male + female + other
 //   };
-
 // };
+
