@@ -7,7 +7,8 @@ import {
   updateAttendance,
   deleteAttendance,
   getAttendanceReport,
-  getTodayAttendanceSummary
+  getTodayAttendanceSummary,
+  getClassesAttendanceStatus
 } from "../controllers/attendanceController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -33,4 +34,5 @@ router.delete("/:id", deleteAttendance);                // Delete attendance rec
 
 router.get("/classes-status", getClassesAttendanceStatus); // Get attendance status for all classes
 export default router;
+
 
