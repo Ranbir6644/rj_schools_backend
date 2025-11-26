@@ -1,4 +1,4 @@
-import Attendance from "../models/Attendance.js";
+  import Attendance from "../models/Attendance.js";
 import Student from "../models/Student.js";
 import Class from "../models/Class.js";
 import User from "../models/User.js";
@@ -824,6 +824,90 @@ export const getTodayAttendanceSummary = async (req, res) => {
     res.status(500).json({ message: "Error fetching today's attendance summary", error: err.message });
   }
 };
+
+
+// ✅ Get attendance status for all classes for a specific date
+export const getClassesAttendanceStatus = async (req, res) => {
+  try {
+    const { date, type = 'daily' } = req.query;
+
+    const targetDate = date ? new Date(date) : new Date();
+    targetDate.setUTCHours(0, 0, 0, 0);
+
+    // Get all classes
+    const classes = await Class.find().populate('incharge', 'name');
+
+    const statusPromises = classes.map(async (cls) => {
+      if (type === 'daily') {
+        // Daily status - check if attendance marked for specific date
+        const endOfDay = new Date(targetDate);
+        endOfDay.setUTCHours(23, 59, 59, 999);
+
+        const attendanceRecords = await Attendance.find({
+          classId: cls._id,
+          date: { $gte: targetDate, $lte: endOfDay }
+        });
+
+        const totalStudents = await Student.countDocuments({
+          classId: cls._id,
+          createdAt: { $lte: endOfDay }
+        });
+
+        return {
+          classId: cls._id,
+          className: cls.name,
+          section: cls.section,
+          incharge: cls.incharge,
+          totalStudents,
+          markedCount: attendanceRecords.length,
+          attendanceMarked: attendanceRecords.length > 0,
+          date: targetDate.toISOString().split('T')[0]
+        };
+      } else {
+        // Monthly status - count marked days in the month
+        const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+        endOfMonth.setUTCHours(23, 59, 59, 999);
+
+        const distinctDates = await Attendance.distinct('date', {
+          classId: cls._id,
+          date: { $gte: startOfMonth, $lte: endOfMonth }
+        });
+
+        const totalStudents = await Student.countDocuments({
+          classId: cls._id,
+          createdAt: { $lte: endOfMonth }
+        });
+
+        return {
+          classId: cls._id,
+          className: cls.name,
+          section: cls.section,
+          incharge: cls.incharge,
+          totalStudents,
+          markedCount: distinctDates.length,
+          attendanceMarked: distinctDates.length > 0,
+          month: targetDate.getMonth() + 1,
+          year: targetDate.getFullYear()
+        };
+      }
+    });
+
+    const statusResults = await Promise.all(statusPromises);
+
+    res.json({
+      date: targetDate.toISOString().split('T')[0],
+      type,
+      classes: statusResults
+    });
+  } catch (err) {
+    console.error("Error fetching classes attendance status:", err);
+    res.status(500).json({
+      message: "Error fetching classes attendance status",
+      error: err.message
+    });
+  }
+};
 // import Attendance from "../models/Attendance.js";
 // import Student from "../models/Student.js";
 // import Class from "../models/Class.js";
@@ -1606,4 +1690,5 @@ export const getTodayAttendanceSummary = async (req, res) => {
 //   }
 
 // };
+
 
