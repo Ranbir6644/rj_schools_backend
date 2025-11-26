@@ -31,5 +31,6 @@ router.get("/student/:studentId", getStudentAttendance); // Get student attendan
 router.put("/:id", updateAttendance);                   // Update attendance record
 router.delete("/:id", deleteAttendance);                // Delete attendance record
 
-
+router.get("/classes-status", getClassesAttendanceStatus); // Get attendance status for all classes
 export default router;
+
