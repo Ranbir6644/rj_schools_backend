@@ -152,49 +152,7 @@ fineSchema.statics.getStudentFineSummary = async function (studentId, classId = 
         paidRecords: 0
     };
 };
-// fineSchema.statics.getStudentFineSummary = async function (studentId, classId = null) {
-//     const matchStage = { studentId: new mongoose.Types.ObjectId(studentId) }; // ✅ ADDED 'new'
 
-//     if (classId) {
-//         matchStage.classId = new mongoose.Types.ObjectId(classId);
-//     }
-
-//     const result = await this.aggregate([
-//         {
-//             $match: matchStage
-//         },
-//         {
-//             $group: {
-//                 _id: "$studentId",
-//                 totalFine: { $sum: "$fineAmount" },
-//                 totalPaid: { $sum: "$paidAmount" },
-//                 totalPending: { $sum: "$pendingAmount" },
-//                 totalRecords: { $sum: 1 },
-//                 pendingRecords: {
-//                     $sum: {
-//                         $cond: [{ $ne: ["$status", "paid"] }, 1, 0]
-//                     }
-//                 },
-//                 paidRecords: {
-//                     $sum: {
-//                         $cond: [{ $eq: ["$status", "paid"] }, 1, 0]
-//                     }
-//                 }
-//             }
-//         }
-//     ]);
-
-//     return result[0] || {
-//         totalFine: 0,
-//         totalPaid: 0,
-//         totalPending: 0,
-//         totalRecords: 0,
-//         pendingRecords: 0,
-//         paidRecords: 0
-//     };
-// };
-
-// Static method to get class fines - FIXED
 // In your Fine model - update getClassFines method
 fineSchema.statics.getClassFines = async function (classId, status = null, month = null, year = null) {
     const matchStage = { classId: new mongoose.Types.ObjectId(classId) };
@@ -388,11 +346,22 @@ export default mongoose.model("Fine", fineSchema);
 // });
 
 // // Static method to get student fine summary - FIXED
-// fineSchema.statics.getStudentFineSummary = async function (studentId, classId = null) {
-//     const matchStage = { studentId: new mongoose.Types.ObjectId(studentId) }; // ✅ ADDED 'new'
+// // Update getStudentFineSummary in Fine model
+// fineSchema.statics.getStudentFineSummary = async function (studentId, classId = null, month = null, year = null) {
+//     const matchStage = { studentId: new mongoose.Types.ObjectId(studentId) };
 
 //     if (classId) {
 //         matchStage.classId = new mongoose.Types.ObjectId(classId);
+//     }
+
+//     // Add month and year filtering
+//     if (month && year) {
+//         const startDate = new Date(year, month - 1, 1);
+//         const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+//         matchStage.date = {
+//             $gte: startDate,
+//             $lte: endDate
+//         };
 //     }
 
 //     const result = await this.aggregate([
@@ -429,13 +398,65 @@ export default mongoose.model("Fine", fineSchema);
 //         paidRecords: 0
 //     };
 // };
+// // fineSchema.statics.getStudentFineSummary = async function (studentId, classId = null) {
+// //     const matchStage = { studentId: new mongoose.Types.ObjectId(studentId) }; // ✅ ADDED 'new'
+
+// //     if (classId) {
+// //         matchStage.classId = new mongoose.Types.ObjectId(classId);
+// //     }
+
+// //     const result = await this.aggregate([
+// //         {
+// //             $match: matchStage
+// //         },
+// //         {
+// //             $group: {
+// //                 _id: "$studentId",
+// //                 totalFine: { $sum: "$fineAmount" },
+// //                 totalPaid: { $sum: "$paidAmount" },
+// //                 totalPending: { $sum: "$pendingAmount" },
+// //                 totalRecords: { $sum: 1 },
+// //                 pendingRecords: {
+// //                     $sum: {
+// //                         $cond: [{ $ne: ["$status", "paid"] }, 1, 0]
+// //                     }
+// //                 },
+// //                 paidRecords: {
+// //                     $sum: {
+// //                         $cond: [{ $eq: ["$status", "paid"] }, 1, 0]
+// //                     }
+// //                 }
+// //             }
+// //         }
+// //     ]);
+
+// //     return result[0] || {
+// //         totalFine: 0,
+// //         totalPaid: 0,
+// //         totalPending: 0,
+// //         totalRecords: 0,
+// //         pendingRecords: 0,
+// //         paidRecords: 0
+// //     };
+// // };
 
 // // Static method to get class fines - FIXED
-// fineSchema.statics.getClassFines = async function (classId, status = null) {
+// // In your Fine model - update getClassFines method
+// fineSchema.statics.getClassFines = async function (classId, status = null, month = null, year = null) {
 //     const matchStage = { classId: new mongoose.Types.ObjectId(classId) };
 
 //     if (status) {
 //         matchStage.status = status;
+//     }
+
+//     // Add month and year filtering
+//     if (month && year) {
+//         const startDate = new Date(year, month - 1, 1);
+//         const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+//         matchStage.date = {
+//             $gte: startDate,
+//             $lte: endDate
+//         };
 //     }
 
 //     const fines = await this.aggregate([
@@ -509,5 +530,6 @@ export default mongoose.model("Fine", fineSchema);
 //     };
 // };
 
-
 // export default mongoose.model("Fine", fineSchema);
+
+
