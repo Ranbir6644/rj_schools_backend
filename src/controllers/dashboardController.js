@@ -299,7 +299,27 @@ export const getDailyAttendanceGraphData = async (req, res) => {
 // ✅ Get Gender Distribution (Pie Chart)
 export const getGenderDistribution = async (req, res) => {
   try {
+    const user = req.user;
+    let matchStage = {};
+
+    // If teacher, filter students by assigned classes
+    if (user && user.role === 'teacher') {
+      // Find all classes assigned to this teacher
+      const teacherClasses = await Class.find({ incharge: user.id }).select('_id');
+      const classIds = teacherClasses.map(cls => cls._id);
+      if (classIds.length > 0) {
+        matchStage.classId = { $in: classIds };
+      } else {
+        // If teacher has no assigned classes, return zeroes
+        return res.json({
+          success: true,
+          data: { male: 0, female: 0, other: 0, total: 0 }
+        });
+      }
+    }
+
     const genderStats = await Student.aggregate([
+      { $match: matchStage },
       {
         $group: {
           _id: "$gender",
@@ -354,22 +374,27 @@ export const getGenderDistribution = async (req, res) => {
 // ✅ Get All Classes for Dropdown
 export const getAllClasses = async (req, res) => {
   try {
-    const classes = await Class.find()
-      .populate('incharge', 'name')
-      .select('name section incharge')
-      .sort({ name: 1 });
-
-    res.json({
-      success: true,
-      data: classes
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Error fetching classes",
-      error: err.message
-    });
-  }
+      const user = req.user;
+      let teacherId;
+      if(user.role === 'teacher') {
+        teacherId = user.id;
+      }
+      const classes = await Class.find().populate({
+        path: 'incharge'
+      });
+  
+      const teacherClasses = classes.filter(cls => {
+        return cls.incharge && cls.incharge._id.toString() === teacherId;
+      });
+  
+      if(user.role === 'teacher') {
+        return res.json(teacherClasses);
+      }
+  
+      res.json(classes);
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
 };
 
 // ✅ Get Complete Dashboard Data (All in one)
@@ -538,7 +563,7 @@ const getGenderDistributionData = async () => {
 
   return {
     male,
-    female,
+    female,  
     other,
     total: male + female + other
   };
@@ -1089,4 +1114,3 @@ const getGenderDistributionData = async () => {
 //     total: male + female + other
 //   };
 // };
-
