@@ -1,8 +1,8 @@
-  import Attendance from "../models/Attendance.js";
+import Attendance from "../models/Attendance.js";
 import Student from "../models/Student.js";
 import Class from "../models/Class.js";
 import User from "../models/User.js";
-import Fine from "../models/Fine.js"; // Import Fine model
+import Fine from "../models/Fine.js";
 
 // ✅ Create fine for absent student (moved here to avoid circular dependency)
 const createFineForAbsent = async (attendanceId, studentId, classId, date) => {
@@ -323,85 +323,6 @@ export const markBulkAttendance = async (req, res) => {
   }
 };
 
-
-// ✅ Get attendance for a specific class on a specific date
-// export const getClassAttendance = async (req, res) => {
-//   try {
-//     const { classId, date } = req.query;
-
-//     if (!classId || !date) {
-//       return res.status(400).json({ message: "classId and date are required" });
-//     }
-
-//     const attendanceDate = new Date(date);
-//     const startOfDay = new Date(attendanceDate);
-//     startOfDay.setUTCHours(0, 0, 0, 0);
-
-//     const endOfDay = new Date(attendanceDate);
-//     endOfDay.setUTCHours(23, 59, 59, 999);
-
-//     // 1️⃣ Get all students
-//     const students = await Student.find({ 
-//       classId,
-//      })
-//       .populate('userId', 'name udise ePunjabId')
-//       .select('userId studentImg');
-
-//     console.log(`Found ${students.length} students in class ${classId}`);
-
-//     // 2️⃣ Get attendance records
-//     const attendanceRecords = await Attendance.find({
-//       classId,
-//       date: { $gte: startOfDay, $lte: endOfDay },
-//     }).populate([
-//       { path: 'studentId', select: 'name udise ePunjabId' },
-//       { path: 'takenBy', select: 'name role' },
-//     ]);
-
-//     console.log(`Found ${attendanceRecords.length} attendance records`);
-
-//     // 3️⃣ Create a map safely
-//     const attendanceMap = new Map();
-//     attendanceRecords.forEach(record => {
-//       if (record.studentId && record.studentId._id) {
-//         attendanceMap.set(record.studentId._id.toString(), record);
-//       } else {
-//         console.warn("⚠️ Skipping attendance record without valid studentId:", record._id);
-//       }
-//     });
-
-//     // 4️⃣ Prepare response
-//     const response = students.map(student => {
-//       const attendance = attendanceMap.get(student.userId._id.toString());
-//       return {
-//         studentId: student.userId._id,
-//         studentName: student.userId.name,
-//         studentUdise: student.userId.udise,
-//         studentEPunjabId: student.userId.ePunjabId,
-//         studentImg: student.studentImg, // ✅ Add student image here
-//         status: attendance ? attendance.status : 'not-marked',
-//         remarks: attendance ? attendance.remarks || '' : '',
-//         checkInTime: attendance ? attendance.checkInTime || null : null,
-//         checkOutTime: attendance ? attendance.checkOutTime || null : null,
-//         takenBy: attendance ? attendance.takenBy || null : null,
-//         attendanceId: attendance ? attendance._id : null,
-//       };
-//     });
-
-//     console.log(`Prepared attendance response for ${response.length} students`);
-
-//     res.json({
-//       classId,
-//       date: attendanceDate.toISOString().split('T')[0],
-//       attendance: response,
-//       totalStudents: students.length,
-//     });
-//   } catch (err) {
-//     console.error("❌ Error in getClassAttendance:", err);
-//     res.status(500).json({ message: "Error fetching class attendance", error: err.message });
-//   }
-// };
-
 // ✅ Get attendance for a specific class on a specific date
 export const getClassAttendance = async (req, res) => {
   try {
@@ -419,7 +340,7 @@ export const getClassAttendance = async (req, res) => {
     endOfDay.setUTCHours(23, 59, 59, 999);
 
     // 🚨 CRITICAL FIX: Only get students who were created ON or BEFORE the selected date
-    const students = await Student.find({ 
+    const students = await Student.find({
       classId,
       createdAt: { $lte: endOfDay } // Only students created before or on the selected date
     })
@@ -481,7 +402,6 @@ export const getClassAttendance = async (req, res) => {
     res.status(500).json({ message: "Error fetching class attendance", error: err.message });
   }
 };
-
 
 // ✅ Get attendance for a specific student
 export const getStudentAttendance = async (req, res) => {
@@ -628,83 +548,6 @@ export const deleteAttendance = async (req, res) => {
 };
 
 // ✅ Get attendance report for a class (monthly/weekly)
-// export const getAttendanceReport = async (req, res) => {
-//   try {
-//     const { classId, month, year } = req.query;
-
-//     if (!classId || !month || !year) {
-//       return res.status(400).json({ message: "classId, month, and year are required" });
-//     }
-
-//     const startDate = new Date(year, month - 1, 1);
-//     const endDate = new Date(year, month, 0);
-
-//     // Get all students in the class
-//     const students = await Student.find({ classId })
-//       .populate('userId', 'name udise ePunjabId')
-//       .select('userId studentImg'); // ✅ Add studentImg
-
-//     // Get all attendance records for the month
-//     const attendanceRecords = await Attendance.find({
-//       classId,
-//       date: {
-//         $gte: startDate,
-//         $lte: endDate
-//       }
-//     });
-
-//     // Prepare report data
-//     const report = students.map(student => {
-//       const studentAttendance = attendanceRecords.filter(
-//         record => record.studentId.toString() === student.userId._id.toString()
-//       );
-
-//       const stats = {
-//         studentId: student.userId._id,
-//         studentName: student.userId.name,
-//         studentUdise: student.userId.udise,
-//         studentEPunjabId: student.userId.ePunjabId,
-//         studentImg: student.studentImg, // ✅ Add student image
-
-//         totalDays: 0,
-//         present: 0,
-//         absent: 0,
-//         leave: 0,
-//         attendancePercentage: 0,
-//         records: []
-//       };
-
-//       studentAttendance.forEach(record => {
-//         stats.totalDays++;
-//         stats[record.status]++;
-//         stats.records.push({
-//           date: record.date,
-//           status: record.status,
-//           remarks: record.remarks
-//         });
-//       });
-
-//       if (stats.totalDays > 0) {
-//         const attendedDays = stats.present;
-//         stats.attendancePercentage = ((attendedDays / stats.totalDays) * 100).toFixed(2);
-//       }
-
-//       return stats;
-//     });
-
-//     res.json({
-//       classId,
-//       month,
-//       year,
-//       startDate,
-//       endDate,
-//       report
-//     });
-//   } catch (err) {
-//     res.status(500).json({ message: "Error generating attendance report", error: err.message });
-//   }
-// };
-
 export const getAttendanceReport = async (req, res) => {
   try {
     const { classId, month, year } = req.query;
@@ -717,7 +560,7 @@ export const getAttendanceReport = async (req, res) => {
     const endDate = new Date(year, month, 0);
 
     // 🚨 CRITICAL FIX: Get students who existed during the report period
-    const students = await Student.find({ 
+    const students = await Student.find({
       classId,
       createdAt: { $lte: endDate } // Only students created before or during the report month
     })
@@ -825,7 +668,6 @@ export const getTodayAttendanceSummary = async (req, res) => {
   }
 };
 
-
 // ✅ Get attendance status for all classes for a specific date
 export const getClassesAttendanceStatus = async (req, res) => {
   try {
@@ -908,7 +750,9 @@ export const getClassesAttendanceStatus = async (req, res) => {
     });
   }
 };
-// import Attendance from "../models/Attendance.js";
+
+
+//   import Attendance from "../models/Attendance.js";
 // import Student from "../models/Student.js";
 // import Class from "../models/Class.js";
 // import User from "../models/User.js";
@@ -1078,7 +922,7 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //   }
 // };
 
-// // ✅ Mark attendance for multiple students (bulk operation)
+// // ✅ Mark attendance for multiple students (bulk)
 // export const markBulkAttendance = async (req, res) => {
 //   try {
 //     const { classId, date, attendanceRecords } = req.body;
@@ -1232,122 +1076,83 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //       .json({ message: "Error marking bulk attendance", error: err.message });
 //   }
 // };
-// // export const markBulkAttendance = async (req, res) => {
+
+
+// // ✅ Get attendance for a specific class on a specific date
+// // export const getClassAttendance = async (req, res) => {
 // //   try {
-// //     const { classId, date, attendanceRecords } = req.body;
-// //     const takenBy = req.user.id;
+// //     const { classId, date } = req.query;
 
-// //     if (!classId || !date || !attendanceRecords || !Array.isArray(attendanceRecords)) {
-// //       return res.status(400).json({
-// //         message: "classId, date, and attendanceRecords array are required"
-// //       });
-// //     }
-
-// //     // Check if class exists
-// //     const classExists = await Class.findById(classId);
-// //     if (!classExists) {
-// //       return res.status(404).json({ message: "Class not found" });
+// //     if (!classId || !date) {
+// //       return res.status(400).json({ message: "classId and date are required" });
 // //     }
 
 // //     const attendanceDate = new Date(date);
-// //     attendanceDate.setUTCHours(0, 0, 0, 0);
+// //     const startOfDay = new Date(attendanceDate);
+// //     startOfDay.setUTCHours(0, 0, 0, 0);
 
-// //     const results = {
-// //       success: [],
-// //       failed: [],
-// //       updated: []
-// //     };
+// //     const endOfDay = new Date(attendanceDate);
+// //     endOfDay.setUTCHours(23, 59, 59, 999);
 
-// //     // Process each attendance record
-// //     for (const record of attendanceRecords) {
-// //       try {
-// //         const { studentId, status, remarks, checkInTime, checkOutTime } = record;
+// //     // 1️⃣ Get all students
+// //     const students = await Student.find({ 
+// //       classId,
+// //      })
+// //       .populate('userId', 'name udise ePunjabId')
+// //       .select('userId studentImg');
 
-// //         // Validate status
-// //         if (!["present", "absent", "leave"].includes(status)) {
-// //           results.failed.push({
-// //             studentId,
-// //             reason: "Invalid status. Must be: present, absent, or leave"
-// //           });
-// //           continue;
-// //         }
+// //     console.log(`Found ${students.length} students in class ${classId}`);
 
-// //         // Check if student belongs to the class
-// //         const student = await Student.findOne({ userId: studentId, classId });
-// //         if (!student) {
-// //           results.failed.push({
-// //             studentId,
-// //             reason: "Student not found or does not belong to this class"
-// //           });
-// //           continue;
-// //         }
+// //     // 2️⃣ Get attendance records
+// //     const attendanceRecords = await Attendance.find({
+// //       classId,
+// //       date: { $gte: startOfDay, $lte: endOfDay },
+// //     }).populate([
+// //       { path: 'studentId', select: 'name udise ePunjabId' },
+// //       { path: 'takenBy', select: 'name role' },
+// //     ]);
 
-// //         // Check for existing attendance
-// //         const existingAttendance = await Attendance.findOne({
-// //           studentId,
-// //           classId,
-// //           date: attendanceDate
-// //         });
+// //     console.log(`Found ${attendanceRecords.length} attendance records`);
 
-// //         let attendanceRecord;
-
-// //         if (existingAttendance) {
-// //           // Update existing
-// //           existingAttendance.status = status;
-// //           existingAttendance.takenBy = takenBy;
-// //           existingAttendance.remarks = remarks || existingAttendance.remarks;
-// //           existingAttendance.checkInTime = checkInTime || existingAttendance.checkInTime;
-// //           existingAttendance.checkOutTime = checkOutTime || existingAttendance.checkOutTime;
-
-// //           attendanceRecord = await existingAttendance.save();
-// //           results.updated.push(studentId);
-// //         } else {
-// //           // Create new
-// //           const newAttendance = new Attendance({
-// //             classId,
-// //             studentId,
-// //             date: attendanceDate,
-// //             status,
-// //             takenBy,
-// //             remarks: remarks || "",
-// //             checkInTime,
-// //             checkOutTime
-// //           });
-
-// //           attendanceRecord = await newAttendance.save();
-// //           results.success.push(studentId);
-// //         }
-
-// //         // ✅ Auto-create fine for absent students (for both new and updated records)
-// //         if (status === 'absent') {
-// //           try {
-// //             await createFineForAbsent(
-// //               attendanceRecord._id,
-// //               studentId,
-// //               classId,
-// //               attendanceDate
-// //             );
-// //             console.log(`Fine created for absent student: ${studentId}`);
-// //           } catch (fineError) {
-// //             console.error("Error creating fine for student:", studentId, fineError);
-// //             // Don't fail the attendance marking if fine creation fails
-// //           }
-// //         }
-
-// //       } catch (error) {
-// //         results.failed.push({
-// //           studentId: record.studentId,
-// //           reason: error.message
-// //         });
+// //     // 3️⃣ Create a map safely
+// //     const attendanceMap = new Map();
+// //     attendanceRecords.forEach(record => {
+// //       if (record.studentId && record.studentId._id) {
+// //         attendanceMap.set(record.studentId._id.toString(), record);
+// //       } else {
+// //         console.warn("⚠️ Skipping attendance record without valid studentId:", record._id);
 // //       }
-// //     }
+// //     });
+
+// //     // 4️⃣ Prepare response
+// //     const response = students.map(student => {
+// //       const attendance = attendanceMap.get(student.userId._id.toString());
+// //       return {
+// //         studentId: student.userId._id,
+// //         studentName: student.userId.name,
+// //         studentUdise: student.userId.udise,
+// //         studentEPunjabId: student.userId.ePunjabId,
+// //         studentImg: student.studentImg, // ✅ Add student image here
+// //         status: attendance ? attendance.status : 'not-marked',
+// //         remarks: attendance ? attendance.remarks || '' : '',
+// //         checkInTime: attendance ? attendance.checkInTime || null : null,
+// //         checkOutTime: attendance ? attendance.checkOutTime || null : null,
+// //         takenBy: attendance ? attendance.takenBy || null : null,
+// //         attendanceId: attendance ? attendance._id : null,
+// //       };
+// //     });
+
+// //     console.log(`Prepared attendance response for ${response.length} students`);
 
 // //     res.json({
-// //       message: "Bulk attendance marking completed",
-// //       results
+// //       classId,
+// //       date: attendanceDate.toISOString().split('T')[0],
+// //       attendance: response,
+// //       totalStudents: students.length,
 // //     });
 // //   } catch (err) {
-// //     res.status(500).json({ message: "Error marking bulk attendance", error: err.message });
+// //     console.error("❌ Error in getClassAttendance:", err);
+// //     res.status(500).json({ message: "Error fetching class attendance", error: err.message });
 // //   }
 // // };
 
@@ -1367,12 +1172,15 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //     const endOfDay = new Date(attendanceDate);
 //     endOfDay.setUTCHours(23, 59, 59, 999);
 
-//     // 1️⃣ Get all students
-//     const students = await Student.find({ classId })
+//     // 🚨 CRITICAL FIX: Only get students who were created ON or BEFORE the selected date
+//     const students = await Student.find({ 
+//       classId,
+//       createdAt: { $lte: endOfDay } // Only students created before or on the selected date
+//     })
 //       .populate('userId', 'name udise ePunjabId')
-//       .select('userId studentImg');
+//       .select('userId studentImg createdAt'); // ✅ Include createdAt
 
-//     console.log(`Found ${students.length} students in class ${classId}`);
+//     console.log(`Found ${students.length} students in class ${classId} who were created on or before ${date}`);
 
 //     // 2️⃣ Get attendance records
 //     const attendanceRecords = await Attendance.find({
@@ -1395,7 +1203,7 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //       }
 //     });
 
-//     // 4️⃣ Prepare response
+//     // 4️⃣ Prepare response - ONLY include students who existed on that date
 //     const response = students.map(student => {
 //       const attendance = attendanceMap.get(student.userId._id.toString());
 //       return {
@@ -1403,7 +1211,8 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //         studentName: student.userId.name,
 //         studentUdise: student.userId.udise,
 //         studentEPunjabId: student.userId.ePunjabId,
-//         studentImg: student.studentImg, // ✅ Add student image here
+//         studentImg: student.studentImg,
+//         createdAt: student.createdAt, // ✅ Include createdAt for debugging
 //         status: attendance ? attendance.status : 'not-marked',
 //         remarks: attendance ? attendance.remarks || '' : '',
 //         checkInTime: attendance ? attendance.checkInTime || null : null,
@@ -1573,6 +1382,83 @@ export const getClassesAttendanceStatus = async (req, res) => {
 // };
 
 // // ✅ Get attendance report for a class (monthly/weekly)
+// // export const getAttendanceReport = async (req, res) => {
+// //   try {
+// //     const { classId, month, year } = req.query;
+
+// //     if (!classId || !month || !year) {
+// //       return res.status(400).json({ message: "classId, month, and year are required" });
+// //     }
+
+// //     const startDate = new Date(year, month - 1, 1);
+// //     const endDate = new Date(year, month, 0);
+
+// //     // Get all students in the class
+// //     const students = await Student.find({ classId })
+// //       .populate('userId', 'name udise ePunjabId')
+// //       .select('userId studentImg'); // ✅ Add studentImg
+
+// //     // Get all attendance records for the month
+// //     const attendanceRecords = await Attendance.find({
+// //       classId,
+// //       date: {
+// //         $gte: startDate,
+// //         $lte: endDate
+// //       }
+// //     });
+
+// //     // Prepare report data
+// //     const report = students.map(student => {
+// //       const studentAttendance = attendanceRecords.filter(
+// //         record => record.studentId.toString() === student.userId._id.toString()
+// //       );
+
+// //       const stats = {
+// //         studentId: student.userId._id,
+// //         studentName: student.userId.name,
+// //         studentUdise: student.userId.udise,
+// //         studentEPunjabId: student.userId.ePunjabId,
+// //         studentImg: student.studentImg, // ✅ Add student image
+
+// //         totalDays: 0,
+// //         present: 0,
+// //         absent: 0,
+// //         leave: 0,
+// //         attendancePercentage: 0,
+// //         records: []
+// //       };
+
+// //       studentAttendance.forEach(record => {
+// //         stats.totalDays++;
+// //         stats[record.status]++;
+// //         stats.records.push({
+// //           date: record.date,
+// //           status: record.status,
+// //           remarks: record.remarks
+// //         });
+// //       });
+
+// //       if (stats.totalDays > 0) {
+// //         const attendedDays = stats.present;
+// //         stats.attendancePercentage = ((attendedDays / stats.totalDays) * 100).toFixed(2);
+// //       }
+
+// //       return stats;
+// //     });
+
+// //     res.json({
+// //       classId,
+// //       month,
+// //       year,
+// //       startDate,
+// //       endDate,
+// //       report
+// //     });
+// //   } catch (err) {
+// //     res.status(500).json({ message: "Error generating attendance report", error: err.message });
+// //   }
+// // };
+
 // export const getAttendanceReport = async (req, res) => {
 //   try {
 //     const { classId, month, year } = req.query;
@@ -1584,10 +1470,13 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //     const startDate = new Date(year, month - 1, 1);
 //     const endDate = new Date(year, month, 0);
 
-//     // Get all students in the class
-//     const students = await Student.find({ classId })
+//     // 🚨 CRITICAL FIX: Get students who existed during the report period
+//     const students = await Student.find({ 
+//       classId,
+//       createdAt: { $lte: endDate } // Only students created before or during the report month
+//     })
 //       .populate('userId', 'name udise ePunjabId')
-//       .select('userId studentImg'); // ✅ Add studentImg
+//       .select('userId studentImg createdAt');
 
 //     // Get all attendance records for the month
 //     const attendanceRecords = await Attendance.find({
@@ -1598,7 +1487,7 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //       }
 //     });
 
-//     // Prepare report data
+//     // Prepare report data - only for students who existed during that period
 //     const report = students.map(student => {
 //       const studentAttendance = attendanceRecords.filter(
 //         record => record.studentId.toString() === student.userId._id.toString()
@@ -1609,8 +1498,8 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //         studentName: student.userId.name,
 //         studentUdise: student.userId.udise,
 //         studentEPunjabId: student.userId.ePunjabId,
-//         studentImg: student.studentImg, // ✅ Add student image
-
+//         studentImg: student.studentImg,
+//         createdAt: student.createdAt, // ✅ Include for reference
 //         totalDays: 0,
 //         present: 0,
 //         absent: 0,
@@ -1688,7 +1577,90 @@ export const getClassesAttendanceStatus = async (req, res) => {
 //   } catch (err) {
 //     res.status(500).json({ message: "Error fetching today's attendance summary", error: err.message });
 //   }
+// };
 
+
+// // ✅ Get attendance status for all classes for a specific date
+// export const getClassesAttendanceStatus = async (req, res) => {
+//   try {
+//     const { date, type = 'daily' } = req.query;
+
+//     const targetDate = date ? new Date(date) : new Date();
+//     targetDate.setUTCHours(0, 0, 0, 0);
+
+//     // Get all classes
+//     const classes = await Class.find().populate('incharge', 'name');
+
+//     const statusPromises = classes.map(async (cls) => {
+//       if (type === 'daily') {
+//         // Daily status - check if attendance marked for specific date
+//         const endOfDay = new Date(targetDate);
+//         endOfDay.setUTCHours(23, 59, 59, 999);
+
+//         const attendanceRecords = await Attendance.find({
+//           classId: cls._id,
+//           date: { $gte: targetDate, $lte: endOfDay }
+//         });
+
+//         const totalStudents = await Student.countDocuments({
+//           classId: cls._id,
+//           createdAt: { $lte: endOfDay }
+//         });
+
+//         return {
+//           classId: cls._id,
+//           className: cls.name,
+//           section: cls.section,
+//           incharge: cls.incharge,
+//           totalStudents,
+//           markedCount: attendanceRecords.length,
+//           attendanceMarked: attendanceRecords.length > 0,
+//           date: targetDate.toISOString().split('T')[0]
+//         };
+//       } else {
+//         // Monthly status - count marked days in the month
+//         const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+//         const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+//         endOfMonth.setUTCHours(23, 59, 59, 999);
+
+//         const distinctDates = await Attendance.distinct('date', {
+//           classId: cls._id,
+//           date: { $gte: startOfMonth, $lte: endOfMonth }
+//         });
+
+//         const totalStudents = await Student.countDocuments({
+//           classId: cls._id,
+//           createdAt: { $lte: endOfMonth }
+//         });
+
+//         return {
+//           classId: cls._id,
+//           className: cls.name,
+//           section: cls.section,
+//           incharge: cls.incharge,
+//           totalStudents,
+//           markedCount: distinctDates.length,
+//           attendanceMarked: distinctDates.length > 0,
+//           month: targetDate.getMonth() + 1,
+//           year: targetDate.getFullYear()
+//         };
+//       }
+//     });
+
+//     const statusResults = await Promise.all(statusPromises);
+
+//     res.json({
+//       date: targetDate.toISOString().split('T')[0],
+//       type,
+//       classes: statusResults
+//     });
+//   } catch (err) {
+//     console.error("Error fetching classes attendance status:", err);
+//     res.status(500).json({
+//       message: "Error fetching classes attendance status",
+//       error: err.message
+//     });
+//   }
 // };
 
 
