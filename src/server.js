@@ -11,7 +11,8 @@ import attendanceRoutes from "./routes/attendanceRoutes.js";
 import holidayRoutes from "./routes/holidayRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import fineRoutes from './routes/fineRoutes.js';
-import dashboardRoutes from "./routes/dashboardRoutes.js"
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import sessionRoutes from './routes/sessionRoutes.js';
 import axios from "axios";
 
 dotenv.config();
@@ -48,6 +49,7 @@ app.use("/api/holidays", holidayRoutes);
 app.use('/api/fines', fineRoutes);
 app.use("/api/dashboard", dashboardRoutes); 
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/archivesession", sessionRoutes);
 
 // Health check route
 app.get("/health", (req, res) => {
@@ -81,6 +83,7 @@ mongoose
     console.error("MongoDB connection error:", err);
     process.exit(1);
   });
+
 
 
 
