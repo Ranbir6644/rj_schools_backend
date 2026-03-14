@@ -489,12 +489,7 @@ function getSundaysInMonth(month, year) {
   return sundays;
 }
 
-
 // import Holiday from "../models/Holiday.js";
-
-// // ✅ Create a new holiday
-
-
 
 // // ✅ Create a new holiday - ENHANCED DUPLICATE CHECK
 // export const createHoliday = async (req, res) => {
@@ -615,35 +610,6 @@ function getSundaysInMonth(month, year) {
 //   }
 // };
 
-// // ✅ Get holidays by month and year
-// // export const getHolidaysByMonth = async (req, res) => {
-// //   try {
-// //     const { month, year } = req.query;
-
-// //     if (
-// //       !month ||
-// //       !year ||
-// //       isNaN(month) ||
-// //       isNaN(year) ||
-// //       month < 1 ||
-// //       month > 12
-// //     ) {
-// //       return res.status(400).json({ message: "Valid month and year are required" });
-// //     }
-
-// //     const startDate = new Date(`${year}-${String(month).padStart(2, "0")}-01T00:00:00.000Z`);
-// //     const endDate = new Date(`${year}-${String(Number(month) + 1).padStart(2, "0")}-01T00:00:00.000Z`);
-
-// //     const holidays = await Holiday.find({
-// //       date: { $gte: startDate, $lt: endDate },
-// //     }).sort({ date: 1 });
-
-// //     res.json({ holidays });
-// //   } catch (err) {
-// //     res.status(500).json({ message: "Error fetching monthly holidays", error: err.message });
-// //   }
-// // };
-
 // // ✅ Get holidays by month and year - FIXED
 // export const getHolidaysByMonth = async (req, res) => {
 //   try {
@@ -686,7 +652,6 @@ function getSundaysInMonth(month, year) {
 //   }
 // };
 
-// // ✅ Mark all Sundays as holidays for a specific month
 // // ✅ Mark all Sundays as holidays for a specific month - FIXED TIMEZONE ISSUE
 // export const markSundaysAsHolidays = async (req, res) => {
 //   try {
@@ -835,6 +800,153 @@ function getSundaysInMonth(month, year) {
 //   }
 // };
 
+// // ✅ Mark bulk days as holidays - FIXED TIMEZONE ISSUE
+// export const markBulkDaysHolidays = async (req, res) => {
+//   try {
+//     const { startDate, endDate, title = "Holiday", description = "Bulk holiday period" } = req.body;
+
+//     // Validate input
+//     if (!startDate || !endDate) {
+//       return res.status(400).json({
+//         message: "startDate and endDate are required in request body"
+//       });
+//     }
+
+//     const start = new Date(startDate);
+//     const end = new Date(endDate);
+
+//     // Validate dates
+//     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+//       return res.status(400).json({
+//         message: "Invalid date format. Please provide valid ISO date strings"
+//       });
+//     }
+
+//     if (start > end) {
+//       return res.status(400).json({
+//         message: "Start date must be before or equal to end date"
+//       });
+//     }
+
+//     // Generate all dates in the range
+//     const dates = [];
+//     const current = new Date(Date.UTC(
+//       start.getUTCFullYear(),
+//       start.getUTCMonth(),
+//       start.getUTCDate(),
+//       12, 0, 0, 0
+//     ));
+//     const endDateUTC = new Date(Date.UTC(
+//       end.getUTCFullYear(),
+//       end.getUTCMonth(),
+//       end.getUTCDate(),
+//       12, 0, 0, 0
+//     ));
+
+//     while (current <= endDateUTC) {
+//       dates.push(new Date(current));
+//       current.setUTCDate(current.getUTCDate() + 1);
+//     }
+
+//     if (dates.length === 0) {
+//       return res.status(400).json({
+//         message: "No dates found in the specified range"
+//       });
+//     }
+
+//     const results = {
+//       created: [],
+//       alreadyExists: [],
+//       errors: []
+//     };
+
+//     // Create holidays for each day in the range
+//     for (const dateObj of dates) {
+//       try {
+//         const startOfDay = new Date(dateObj);
+//         startOfDay.setUTCHours(0, 0, 0, 0);
+
+//         const endOfDayRange = new Date(dateObj);
+//         endOfDayRange.setUTCHours(23, 59, 59, 999);
+
+//         // Check if holiday already exists for this date
+//         const existingHoliday = await Holiday.findOne({
+//           date: {
+//             $gte: startOfDay,
+//             $lt: endOfDayRange
+//           }
+//         });
+
+//         if (existingHoliday) {
+//           results.alreadyExists.push({
+//             date: dateObj.toISOString().split('T')[0],
+//             existingHoliday: {
+//               title: existingHoliday.title,
+//               id: existingHoliday._id
+//             },
+//             message: `Holiday '${existingHoliday.title}' already exists for this date`
+//           });
+//           continue;
+//         }
+
+//         // Create new holiday
+//         const holiday = await Holiday.create({
+//           title,
+//           description,
+//           date: dateObj,
+//           createdBy: req.user.id,
+//         });
+
+//         results.created.push({
+//           date: holiday.date.toISOString().split('T')[0],
+//           holidayId: holiday._id,
+//           title: holiday.title
+//         });
+
+//       } catch (error) {
+//         results.errors.push({
+//           date: dateObj.toISOString().split('T')[0],
+//           error: error.message
+//         });
+//       }
+//     }
+
+//     // Prepare response message
+//     let message = '';
+//     if (results.created.length > 0) {
+//       message += `Successfully created ${results.created.length} holiday(s). `;
+//     }
+//     if (results.alreadyExists.length > 0) {
+//       message += `${results.alreadyExists.length} day(s) already marked as holidays. `;
+//     }
+//     if (results.errors.length > 0) {
+//       message += `Encountered ${results.errors.length} error(s). `;
+//     }
+
+//     if (results.created.length === 0 && results.alreadyExists.length > 0) {
+//       message = `All ${results.alreadyExists.length} days are already marked as holidays. No new holidays were created.`;
+//     }
+
+//     res.status(200).json({
+//       message: message.trim(),
+//       summary: {
+//         totalDays: dates.length,
+//         created: results.created.length,
+//         alreadyExists: results.alreadyExists.length,
+//         errors: results.errors.length
+//       },
+//       details: results
+//     });
+
+//   } catch (err) {
+//     console.error("Error in markBulkDaysHolidays:", err);
+//     res.status(500).json({
+//       message: "Error marking bulk days as holidays",
+//       error: err.message
+//     });
+//   }
+// };
+
 // // Helper function to get all Sundays in a month - FIXED TIMEZONE ISSUE
 // function getSundaysInMonth(month, year) {
 //   const sundays = [];
@@ -867,4 +979,5 @@ function getSundaysInMonth(month, year) {
 
 //   return sundays;
 // }
+
 
