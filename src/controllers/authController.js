@@ -83,11 +83,8 @@ export const logout = async (req, res) => {
 
 
 // import User from "../models/User.js";
-// import { hashPassword, comparePassword } from "../middleware/hashPassword.js";
 // import { generateAccessToken, generateRefreshToken } from "../utils/jwt.js";
 // import jwt from "jsonwebtoken";
-// import Student from "../models/Student.js";
-// import Teacher from "../models/Teacher.js";
 
 // export const register = async (req, res) => {
 //   try {
@@ -95,8 +92,6 @@ export const logout = async (req, res) => {
 
 //     const userExists = await User.findOne({ $or: [{ udise }, { ePunjabId }] });
 //     if (userExists) return res.status(400).json({ message: "User with this UDISE or ePunjab ID already exists" });
-
-//     // const hashed = await hashPassword(password);
 
 //     const user = await User.create({
 //       name,
@@ -115,13 +110,8 @@ export const logout = async (req, res) => {
 //   try {
 //     const { udise, ePunjabId } = req.body;
 
-//     // const user = await User.findOne({ $or: [{ udise }, { ePunjabId }] });
-//     // if (!user) return res.status(404).json({ message: "User not found" });
-
 //     const user = await User.findOne({ udise, ePunjabId });
 //     if (!user) return res.status(404).json({ message: "Invalid UDISE or ePunjab ID" });
-//     // const isMatch = await comparePassword(password, user.password);
-//     // if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
 //     const accessToken = generateAccessToken(user);
 //     const refreshToken = generateRefreshToken(user);
@@ -141,6 +131,7 @@ export const logout = async (req, res) => {
 
 // export const refresh = async (req, res) => {
 //   const { refreshToken } = req.body;
+//   console.log("Refresh token request received:", refreshToken);
 //   if (!refreshToken) return res.status(401).json({ message: "Refresh Token required" });
 
 //   try {
