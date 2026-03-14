@@ -617,17 +617,15 @@ export const previewMySQLStudent = async (req, res) => {
     });
   }
 };
-
 // import Student from "../models/Student.js";
 // import User from "../models/User.js";
 // import cloudinary from "../utils/cloudinaryConfig.js";
 // import { uploadFromBuffer } from "../utils/uploadToCloudinary.js";
 // import Class from "../models/Class.js"; // ✅ Add this import
 
-// import mongoose from "mongoose";
 // import mysql from "mysql2/promise";
 
-// // ✅ Create Student with Transaction (safe rollback on error)
+
 // export const createStudent = async (req, res) => {
 
 //   try {
@@ -766,6 +764,7 @@ export const previewMySQLStudent = async (req, res) => {
 //     });
 //   }
 // };
+
 
 // // ✅ Get all students
 // export const getAllStudents = async (req, res) => {
@@ -1146,6 +1145,9 @@ export const previewMySQLStudent = async (req, res) => {
 //     });
 
 //     // Fetch student from MySQL
+//     const query = `SELECT * FROM registration_tbl WHERE Raadhar_no = ` + mysql.escape(Raadhar_no);
+//     console.log("🔍 Executing query:", query);
+
 //     const [rows] = await mysqlConn.execute(
 //       "SELECT * FROM registration_tbl WHERE Raadhar_no = ?",
 //       [Raadhar_no]
@@ -1153,6 +1155,9 @@ export const previewMySQLStudent = async (req, res) => {
 
 //     await mysqlConn.end();
 
+//     console.log("🔍 Previewing student with Raadhar_no:", Raadhar_no);
+//     console.log("👀 Found rows:", rows.length);
+//     console.log("📋 Row data:", rows[0]);
 //     if (rows.length === 0) {
 //       return res.status(404).json({ message: "No student found with this Raadhar number" });
 //     }
@@ -1230,6 +1235,6 @@ export const previewMySQLStudent = async (req, res) => {
 //       error: err.message
 //     });
 //   }
-
 // };
+
 
