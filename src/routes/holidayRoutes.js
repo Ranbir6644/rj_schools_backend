@@ -24,7 +24,7 @@ router.get("/:id", getHolidayById);        // Get holiday by ID
 router.put("/:id", updateHoliday);         // Update holiday
 router.delete("/:id", deleteHoliday);      // Delete holiday
 
-router.post('/sundays', protect, markSundaysAsHolidays);
+router.post('/sundays', markSundaysAsHolidays);
 router.post('/bulk', markBulkDaysHolidays);            // ✅ Mark bulk date range as holidays
 
 export default router;
