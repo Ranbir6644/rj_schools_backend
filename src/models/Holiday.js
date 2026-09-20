@@ -14,7 +14,11 @@ const holidaySchema = new mongoose.Schema(
     date: {
       type: Date,
       required: true,
-      unique: true,
+    },
+    classId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Class",
+      default: null,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -24,5 +28,7 @@ const holidaySchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+holidaySchema.index({ date: 1, classId: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model("Holiday", holidaySchema);
