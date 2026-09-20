@@ -5,60 +5,19 @@ import Class from "../models/Class.js";
 import User from "../models/User.js";
 import Fine from "../models/Fine.js";
 import Holiday from "../models/Holiday.js";
-import Session from "../models/Session.js";
 
 // ✅ LEAVE LIMIT MANAGEMENT
 const LEAVE_LIMIT = 30;
 
-// ✅ Get current session's start and end dates
+// ✅ Get the current academic session (April 1 through March 31)
 const getSessionDates = async () => {
-  try {
-    // Get the most recent active session
-    const session = await Session.findOne(
-      { startDate: { $lte: new Date() } },
-      { startDate: 1, endDate: 1 }
-    ).sort({ startDate: -1 }).limit(1);
+  const today = new Date();
+  const currentYear = today.getUTCFullYear();
+  const sessionStartYear = today.getUTCMonth() >= 3 ? currentYear : currentYear - 1;
+  const academicStart = new Date(Date.UTC(sessionStartYear, 3, 1, 0, 0, 0, 0));
+  const academicEnd = new Date(Date.UTC(sessionStartYear + 1, 2, 31, 23, 59, 59, 999));
 
-    if (!session) {
-      // If no session found, use academic year calculation (April 1)
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const currentMonth = today.getMonth() + 1;
-      
-      let startDate, endDate;
-      if (currentMonth >= 4) {
-        startDate = new Date(currentYear, 3, 1); // April 1 of current year
-        endDate = new Date(currentYear + 1, 2, 31); // March 31 of next year
-      } else {
-        startDate = new Date(currentYear - 1, 3, 1); // April 1 of previous year
-        endDate = new Date(currentYear, 2, 31); // March 31 of current year
-      }
-      return { startDate, endDate };
-    }
-
-    return {
-      startDate: session.startDate,
-      endDate: session.endDate || new Date(session.startDate.getFullYear() + 1, 2, 31)
-    };
-  } catch (error) {
-    console.error("Error getting session dates:", error);
-    // Fallback to academic year
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth() + 1;
-    
-    if (currentMonth >= 4) {
-      return {
-        startDate: new Date(currentYear, 3, 1),
-        endDate: new Date(currentYear + 1, 2, 31)
-      };
-    } else {
-      return {
-        startDate: new Date(currentYear - 1, 3, 1),
-        endDate: new Date(currentYear, 2, 31)
-      };
-    }
-  }
+  return { startDate: academicStart, endDate: academicEnd };
 };
 
 // ✅ Count total leaves for a student in current session
