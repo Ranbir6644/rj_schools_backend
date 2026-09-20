@@ -17,7 +17,7 @@ router.use(protect);
 
 // Fine management routes
 router.get("/class/:classId", getClassFines); // Get fines for a class
-router.get("/classes/all", getAllClassesFines); // Newly added on  10-29-2025 Get all classes fines list
+router.get("/classes/all", getAllClassesFines); // Get all classes fines list
 
 router.get("/student/:studentId/summary", getStudentFineSummary); // Get student fine summary
 
@@ -28,7 +28,4 @@ router.get("/:fineId/payment-history", getFinePaymentHistory); // Get payment hi
 // Utility routes
 router.post("/sync", syncFinesFromAttendance); // Sync fines from attendance
 
-
 export default router;
-
-
