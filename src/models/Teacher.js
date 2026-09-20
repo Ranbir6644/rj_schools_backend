@@ -24,9 +24,6 @@ const teacherSchema = new mongoose.Schema(
     joining: { type: Date },
     about: { type: String },
 
-    // udise: { type: String },
-    // ePunjabId: { type: String },
-
     photo: { type: String },
     photoPublicId: { type: String },
 
